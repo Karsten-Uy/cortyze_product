@@ -20,12 +20,18 @@ class RunPodClientProtocol(Protocol):
 
 
 class MockRunPodClient:
-    """Deterministic synthetic predictions for development.
+    """Synthetic predictions for development.
 
-    Loads any real fixture from `tests/fixtures/golden_pred_*.npy` if one
-    is present (produced by scripts/build_fixture.py). Falls back to an
-    on-the-fly synthetic array seeded by hash(content_url) so repeat calls
-    return the same data.
+    If a real fixture from `tests/fixtures/golden_pred_*.npy` exists
+    (produced by scripts/build_fixture.py), it is returned as-is — that's
+    real-data mode.
+
+    Otherwise, generates a fresh random `(T, 20484)` array on every call.
+    Per-region biases are drawn from N(0, 2) per call, so the 8 region
+    means actually differ from each other and from one call to the next.
+    Without that, averaging hundreds of N(0, 1) vertices per region
+    converges to ~0 (LLN) and sigmoid maps that to ~50 across the board —
+    which looks like a constant value in the UI.
     """
 
     def __init__(self, fixtures_dir: Path | None = None):
@@ -39,9 +45,16 @@ class MockRunPodClient:
             if preds.ndim == 2 and preds.shape[1] == 20484:
                 return preds.astype(np.float32)
 
-        seed = abs(hash(content_url)) % (2**32)
-        rng = np.random.default_rng(seed)
-        return rng.normal(0.0, 1.0, size=(24, 20484)).astype(np.float32)
+        # Imported lazily so loading the API doesn't pay the atlas-labels
+        # read cost in mock-fixture mode.
+        from core.atlas.mapper import REGION_VERTICES
+
+        rng = np.random.default_rng()
+        T = 24
+        preds = rng.normal(0.0, 0.3, size=(T, 20484)).astype(np.float32)
+        for vertex_idx in REGION_VERTICES.values():
+            preds[:, vertex_idx] += float(rng.normal(0.0, 2.0))
+        return preds
 
 
 def get_client() -> RunPodClientProtocol:

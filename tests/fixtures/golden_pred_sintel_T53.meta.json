@@ -1,0 +1,22 @@
+{
+  "video_url": "https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4",
+  "video_sha256": "b670602fa00934ca27c4351bb0efe7ea7a07fae57284e44226025eeed7c51254",
+  "shape": [
+    53,
+    20484
+  ],
+  "dtype": "float32",
+  "events_kept": {
+    "Audio": 1,
+    "Video": 1,
+    "Sentence": 1,
+    "Text": 1,
+    "Word": 1
+  },
+  "tribev2_commit": "72399081ed3f1040c4d996cefb2864a4c46f5b8e",
+  "model_repo": "facebook/tribev2",
+  "model_revision": "f894e783020944dcd96e5568550afe2aa9743f9f",
+  "generated_at": "2026-04-26T04:53:34Z",
+  "generated_on": "Darwin arm64 (CPU+bf16)",
+  "wall_time_seconds": 11827
+}
