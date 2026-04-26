@@ -1,0 +1,18 @@
+{
+  "overall_by_goal": {
+    "awareness": 50.69603810891583,
+    "brand_recall": 45.49810297307818,
+    "conversion": 52.95189678492074,
+    "engagement": 52.66617156062494
+  },
+  "region_scores": {
+    "amygdala": 56.057969996533416,
+    "fusiform_face": 54.897699021296816,
+    "hippocampus": 27.83460477996698,
+    "motor": 61.493932159426656,
+    "prefrontal": 51.77910376231528,
+    "reward": 51.742609313317075,
+    "temporal_language": 32.485887015050295,
+    "visual_cortex": 64.16927129814889
+  }
+}
