@@ -1,0 +1,10 @@
+{
+  "visual_cortex": {"mu": 0.0, "sigma": 1.0},
+  "fusiform_face": {"mu": 0.0, "sigma": 1.0},
+  "amygdala": {"mu": 0.0, "sigma": 1.0},
+  "prefrontal": {"mu": 0.0, "sigma": 1.0},
+  "temporal_language": {"mu": 0.0, "sigma": 1.0},
+  "hippocampus": {"mu": 0.0, "sigma": 1.0},
+  "motor": {"mu": 0.0, "sigma": 1.0},
+  "reward": {"mu": 0.0, "sigma": 1.0}
+}

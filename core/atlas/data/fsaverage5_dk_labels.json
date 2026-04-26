@@ -1,0 +1,41 @@
+{
+  "shape": [
+    20484
+  ],
+  "dtype": "int32",
+  "vertex_order": "lh_0..lh_10241, rh_0..rh_10241 (concatenated, fsaverage5)",
+  "source_atlas": "nilearn.datasets.fetch_atlas_surf_destrieux",
+  "mapping_note": "Hand-curated Destrieux 2010 -> Desikan-Killiany approximate mapping; many-to-one. See scripts/build_atlas_labels.py for the table.",
+  "label_to_id": {
+    "bankssts": 0,
+    "caudalanteriorcingulate": 1,
+    "cuneus": 2,
+    "entorhinal": 3,
+    "frontalpole": 4,
+    "fusiform": 5,
+    "inferiortemporal": 6,
+    "insula": 7,
+    "isthmuscingulate": 8,
+    "lateraloccipital": 9,
+    "lateralorbitofrontal": 10,
+    "lingual": 11,
+    "medialorbitofrontal": 12,
+    "middletemporal": 13,
+    "paracentral": 14,
+    "parahippocampal": 15,
+    "parsopercularis": 16,
+    "parsorbitalis": 17,
+    "parstriangularis": 18,
+    "pericalcarine": 19,
+    "postcentral": 20,
+    "posteriorcingulate": 21,
+    "precentral": 22,
+    "rostralanteriorcingulate": 23,
+    "rostralmiddlefrontal": 24,
+    "superiorfrontal": 25,
+    "superiortemporal": 26,
+    "transversetemporal": 27,
+    "unknown": 28
+  },
+  "vertices_mapped_pct": 76.35715680531146
+}
