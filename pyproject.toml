@@ -11,6 +11,16 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "boto3>=1.35",
     "psycopg[binary]>=3.2",
+    "matplotlib>=3.8",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+# Stage 2 suggestion engine — install when you flip SUGGESTION_LLM_MODE
+# off mock. `uv sync --extra suggestions` gets you both SDKs.
+suggestions = [
+    "openai>=1.0",       # works with OpenAI, vLLM, Ollama, Groq, Together, Anthropic-compat
+    "anthropic>=0.30",   # native Claude SDK with prompt-caching
 ]
 
 [dependency-groups]

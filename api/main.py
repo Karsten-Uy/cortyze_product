@@ -1,11 +1,51 @@
 """FastAPI app entry point."""
 
+import logging
 import os
+import sys
+from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
-from .routes import analyze, health
+# Load .env from repo root before any module reads os.environ. Skipped when
+# running under pytest so tests stay hermetic (no real DATABASE_URL leakage).
+# `override=False` so real shell env vars still take precedence.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if "pytest" not in sys.modules:
+    load_dotenv(_REPO_ROOT / ".env", override=False)
+
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+from .routes import analyze, health  # noqa: E402
+
+_log = logging.getLogger("cortyze.startup")
+
+
+def _log_feature_flags() -> None:
+    """Print which optional features picked up env vars. No secrets — just yes/no."""
+    inference_mode = os.environ.get("INFERENCE_MODE", "mock").strip().lower()
+    storage_mode = os.environ.get("STORAGE_MODE", "").strip().lower()
+    if not storage_mode:
+        # Legacy auto-detect for .env files that pre-date STORAGE_MODE.
+        if not os.environ.get("R2_ACCESS_KEY"):
+            storage_mode = "off"
+        else:
+            storage_mode = "minio" if os.environ.get("S3_ENDPOINT_URL") else "r2"
+    storage = {"off": "off", "minio": "minio (local)", "r2": "r2"}.get(
+        storage_mode, f"unknown ({storage_mode})"
+    )
+    persistence = "configured" if os.environ.get("DATABASE_URL") else "off"
+    suggestions = "enabled" if (
+        os.environ.get("ENABLE_SUGGESTIONS", "").strip().lower() in ("1", "true", "yes")
+    ) else "disabled"
+    suggestion_llm = os.environ.get("SUGGESTION_LLM_MODE", "mock").strip().lower()
+
+    print("[cortyze] startup feature flags:", flush=True)
+    print(f"  inference:      {inference_mode}", flush=True)
+    print(f"  object storage: {storage}", flush=True)
+    print(f"  persistence:    {persistence}", flush=True)
+    print(f"  suggestions:    {suggestions} (mode={suggestion_llm})", flush=True)
 
 
 def create_app() -> FastAPI:
@@ -25,6 +65,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(analyze.router)
+    _log_feature_flags()
     return app
 
 

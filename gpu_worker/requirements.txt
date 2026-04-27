@@ -1,0 +1,13 @@
+# GPU worker dependencies. Base image (runpod/pytorch:2.5.1-cuda12.1.0)
+# already provides torch + CUDA, so we don't pin those here.
+
+# tribev2 brings most of the ML deps (transformers, moviepy, soundfile,
+# x_transformers, einops, neuralset, etc.) as transitive dependencies.
+git+https://github.com/facebookresearch/tribev2.git@main
+
+# RunPod serverless SDK
+runpod>=1.7
+
+# Pod-mode HTTP server
+fastapi>=0.115
+uvicorn[standard]>=0.30

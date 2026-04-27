@@ -33,15 +33,23 @@ Auto-generated OpenAPI Swagger UI: <http://localhost:8000/docs>.
 
 ## Modes
 
-The API auto-degrades based on env vars — every dependency is optional:
+The API auto-degrades based on env vars — every dependency is optional. Inference uses an explicit toggle (`INFERENCE_MODE`), everything else is implicit:
 
-| Env var present | Behavior |
+| Env var | Behavior |
 |---|---|
-| (none required) | Mock mode — `MockRunPodClient` returns synthetic `(T, 20484)`; `/upload-url` and `/report/{id}` return 501 |
-| `R2_*` | `/upload-url` returns presigned URLs; `/analyze` persists predictions to R2 |
+| `INFERENCE_MODE=mock` (default) | `MockRunPodClient` returns synthetic `(T, 20484)` or a local fixture. $0, deterministic. |
+| `INFERENCE_MODE=runpod` + `RUNPOD_POD_URL` | Real GPU via direct Pod HTTP. Use during dev iteration. |
+| `INFERENCE_MODE=runpod` + `RUNPOD_ENDPOINT_ID` + `RUNPOD_API_KEY` | Real GPU via RunPod Serverless. Production path. |
+| `STORAGE_MODE=off` (default) | No object storage. `/upload-url` returns 503; `/analyze` runs without persisting predictions. |
+| `STORAGE_MODE=minio` + `S3_ENDPOINT_URL` + `R2_*` | Local MinIO via [`scripts/dev_minio.sh`](scripts/dev_minio.sh). Browser PUTs go to `localhost:9000`. |
+| `STORAGE_MODE=r2` + `R2_ACCOUNT_ID` + `R2_*` | Cloudflare R2. Endpoint derived from `R2_ACCOUNT_ID`. Production path. |
 | `DATABASE_URL` | `/analyze` writes a row to `reports`; `/report/{id}` returns saved reports |
-| `RUNPOD_ENDPOINT_ID` | Real GPU inference (Stage 1.2 — not yet implemented; raises `NotImplementedError`) |
+| `ENABLE_SUGGESTIONS=true` + `SUGGESTION_LLM_MODE` | Stage 2 suggestion engine. `mock` (default) ships templated suggestions for free; `openai_compatible` / `anthropic` route to real LLMs. |
 | `HF_TOKEN` | `scripts/build_fixture.py` can run TRIBE v2 on the Mac to generate a real fixture |
+
+Switching between mock and real GPU is a single-line `.env` change. Same for storage backend (`STORAGE_MODE`).
+
+**Inference latency reality** — see [SCALING.md](SCALING.md) and [docs/runpod_benchmark.md](docs/runpod_benchmark.md) for measured numbers. Brief version: real-mode `/analyze` takes 3–12 minutes depending on clip length. Mock mode returns instantly. Plan async UX accordingly.
 
 ## Account setup (to leave mock mode)
 
@@ -88,9 +96,9 @@ Required for `/report/{request_id}` and the Stage 4 audience-profile join key.
 
 After all three are set, restart the API. `/upload-url` and `/report/{id}` will start returning real data; `/analyze` will persist every prediction to both R2 and Postgres.
 
-### Later — RunPod (Stage 1.2)
+### RunPod GPU deployment
 
-Deferred until the rest of Stage 1 is solid. Sign up at <https://runpod.io>, add ~$20 credit, generate an API key. Wiring lands in `gpu_worker/` per [IMPLEMENTATION_PLAN.md §4](IMPLEMENTATION_PLAN.md).
+The GPU worker is fully wired and validated. Step-by-step deployment (image build, network volume, Pod or Serverless): [RUNPOD_SESSION.md](RUNPOD_SESSION.md). Measured cost / latency / phase breakdown: [docs/runpod_benchmark.md](docs/runpod_benchmark.md). Speedup roadmap with realistic gains: [SCALING.md](SCALING.md).
 
 ## Running tests
 

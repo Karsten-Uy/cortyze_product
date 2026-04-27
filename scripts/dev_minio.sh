@@ -32,7 +32,11 @@ case "$cmd" in
       echo "MinIO already running (pid $(cat "$PID_FILE"))"
     else
       mkdir -p "$DATA_DIR"
+      # CORS allow-list lets the Next.js frontend at :3000 PUT directly to
+      # presigned upload URLs. "*" is fine for local dev; production R2 uses
+      # bucket-level CORS rules instead.
       MINIO_ROOT_USER="$ROOT_USER" MINIO_ROOT_PASSWORD="$ROOT_PASS" \
+        MINIO_API_CORS_ALLOW_ORIGIN="*" \
         nohup minio server "$DATA_DIR" --console-address ":$CONSOLE_PORT" \
         > "$LOG_FILE" 2>&1 &
       echo $! > "$PID_FILE"

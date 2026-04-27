@@ -1,21 +1,46 @@
 """RunPod GPU worker client.
 
-Stage 1 ships with a `MockRunPodClient` that returns a deterministic
-synthetic (T, 20484) array — the API can serve real BrainReports without
-a GPU. The real `RunPodClient` lands in Stage 1 Phase 1.2 and matches the
-same protocol so swapping is one env-var flip.
+Stage 1 ships with a `MockRunPodClient` that returns deterministic
+synthetic predictions. The real `RunPodPodClient` and `RunPodClient`
+talk to a deployed RunPod Pod or Serverless endpoint respectively.
+All three return a `PredictResponse` carrying both the `(T, 20484)`
+cortical predictions AND the timestamped events used by Stage 2 for
+moment-anchored suggestions.
 """
 
+import base64
+import io
+import json
 import os
+import urllib.error
+import urllib.request
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
 import numpy as np
 
+from services.suggestions.schemas import Event
+
+
+@dataclass
+class PredictResponse:
+    """Output of a single inference call.
+
+    `predictions` is the raw `(T, 20484)` float32 cortical activation array
+    as TRIBE v2 produces. `events` is the timestamped event list (Words,
+    Sentences, Audio, Video chunks) tribev2 builds during preprocessing —
+    None when the client doesn't have access to events (Stage 2 will
+    eventually require them, but Stage 1 doesn't break if absent).
+    """
+
+    predictions: np.ndarray
+    events: list[Event] | None = None
+
 
 class RunPodClientProtocol(Protocol):
-    def predict(self, content_url: str, content_type: str) -> np.ndarray:
-        """Return (T, 20484) float32 cortical predictions."""
+    def predict(self, content_url: str, content_type: str) -> PredictResponse:
+        """Return predictions + timestamped events for the given content."""
         ...
 
 
@@ -24,14 +49,13 @@ class MockRunPodClient:
 
     If a real fixture from `tests/fixtures/golden_pred_*.npy` exists
     (produced by scripts/build_fixture.py), it is returned as-is — that's
-    real-data mode.
+    real-data mode. Events are synthesized either way so the Stage 2
+    pipeline has something to annotate.
 
-    Otherwise, generates a fresh random `(T, 20484)` array on every call.
-    Per-region biases are drawn from N(0, 2) per call, so the 8 region
-    means actually differ from each other and from one call to the next.
-    Without that, averaging hundreds of N(0, 1) vertices per region
-    converges to ~0 (LLN) and sigmoid maps that to ~50 across the board —
-    which looks like a constant value in the UI.
+    Without a fixture: a fresh random `(T, 20484)` array is generated each
+    call with per-region biases drawn from N(0, 2). Without those biases,
+    averaging hundreds of N(0, 1) vertices per region collapses to ~0
+    (LLN) and sigmoid maps that to ~50 across the board.
     """
 
     def __init__(self, fixtures_dir: Path | None = None):
@@ -39,14 +63,15 @@ class MockRunPodClient:
             Path(__file__).resolve().parents[2] / "tests" / "fixtures"
         )
 
-    def predict(self, content_url: str, content_type: str) -> np.ndarray:
+    def predict(self, content_url: str, content_type: str) -> PredictResponse:
         for fixture in sorted(self.fixtures_dir.glob("golden_pred_*.npy")):
             preds = np.load(fixture)
             if preds.ndim == 2 and preds.shape[1] == 20484:
-                return preds.astype(np.float32)
+                return PredictResponse(
+                    predictions=preds.astype(np.float32),
+                    events=_synthesize_events(preds.shape[0]),
+                )
 
-        # Imported lazily so loading the API doesn't pay the atlas-labels
-        # read cost in mock-fixture mode.
         from core.atlas.mapper import REGION_VERTICES
 
         rng = np.random.default_rng()
@@ -54,13 +79,160 @@ class MockRunPodClient:
         preds = rng.normal(0.0, 0.3, size=(T, 20484)).astype(np.float32)
         for vertex_idx in REGION_VERTICES.values():
             preds[:, vertex_idx] += float(rng.normal(0.0, 2.0))
-        return preds
+        return PredictResponse(
+            predictions=preds, events=_synthesize_events(T, rng=rng)
+        )
+
+
+def _synthesize_events(T: int, rng: np.random.Generator | None = None) -> list[Event]:
+    """Make up a plausible-looking event list for mock mode.
+
+    Used so the Stage 2 moment-annotation path has something to bind to
+    when no real events are available. Never used in production.
+    """
+    if rng is None:
+        rng = np.random.default_rng(seed=42)
+    sample_words = [
+        "this", "product", "changes", "everything", "available",
+        "in", "three", "colors", "click", "to", "buy", "now",
+    ]
+    out: list[Event] = []
+    out.append(Event(type="Audio", start_s=0.0, duration_s=float(T)))
+    out.append(Event(type="Video", start_s=0.0, duration_s=float(T)))
+    # Scatter words across the duration
+    n_words = max(1, T // 3)
+    starts = sorted(rng.uniform(0.5, max(0.5, T - 1), size=n_words).tolist())
+    for s in starts:
+        out.append(
+            Event(
+                type="Word",
+                start_s=float(s),
+                duration_s=0.4,
+                text=str(rng.choice(sample_words)),
+            )
+        )
+    return out
+
+
+class RunPodPodClient:
+    """Direct HTTP to a deployed Pod's /predict endpoint.
+
+    Used during the bring-up phase (gpu_worker/README.md §5) when iterating
+    against a Pod is faster than redeploying a Serverless endpoint. Decodes
+    the same response shape that gpu_worker.handler._serialize() produces,
+    including the optional `events` array.
+    """
+
+    def __init__(self):
+        self.url = os.environ["RUNPOD_POD_URL"].rstrip("/")
+        self.timeout = int(os.environ.get("RUNPOD_TIMEOUT_SECONDS", "300"))
+
+    def predict(self, content_url: str, content_type: str) -> PredictResponse:
+        body = json.dumps(
+            {"content_url": content_url, "content_type": content_type}
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.url}/predict",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                output = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(
+                f"Pod HTTP {e.code}: {e.read().decode('utf-8', errors='replace')}"
+            ) from e
+        return _decode_predict_payload(output)
+
+
+class RunPodClient:
+    """Calls a deployed RunPod serverless endpoint over HTTPS.
+
+    Pairs with gpu_worker/handler.py running in serverless mode. Uses
+    urllib (stdlib) so no extra runtime deps. The /runsync endpoint is
+    synchronous-blocking with a hard cap of 5 min on RunPod's side; for
+    longer jobs switch to /run + /status polling (Stage 4).
+    """
+
+    def __init__(self):
+        self.api_key = os.environ["RUNPOD_API_KEY"]
+        self.endpoint_id = os.environ["RUNPOD_ENDPOINT_ID"]
+        self.timeout = int(os.environ.get("RUNPOD_TIMEOUT_SECONDS", "300"))
+
+    def predict(self, content_url: str, content_type: str) -> PredictResponse:
+        url = f"https://api.runpod.ai/v2/{self.endpoint_id}/runsync"
+        body = json.dumps(
+            {"input": {"content_url": content_url, "content_type": content_type}}
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(
+                f"RunPod HTTP {e.code}: {e.read().decode('utf-8', errors='replace')}"
+            ) from e
+
+        status = payload.get("status")
+        if status in ("FAILED", "CANCELLED", "TIMED_OUT"):
+            raise RuntimeError(f"RunPod inference {status}: {payload.get('error')}")
+
+        output = payload.get("output")
+        if output is None:
+            raise RuntimeError(f"RunPod returned no output (status={status}): {payload}")
+        return _decode_predict_payload(output)
+
+
+def _decode_predict_payload(output: dict) -> PredictResponse:
+    """Decode the (predictions, events) payload from a worker response."""
+    npz_bytes = base64.b64decode(output["data_b64"])
+    with np.load(io.BytesIO(npz_bytes)) as data:
+        predictions = data["preds"].astype(np.float32)
+
+    raw_events = output.get("events") or []
+    events = [Event(**e) for e in raw_events] if raw_events else None
+    return PredictResponse(predictions=predictions, events=events)
 
 
 def get_client() -> RunPodClientProtocol:
-    """Return mock client unless RUNPOD_ENDPOINT_ID is set (Stage 1.2)."""
-    if os.environ.get("RUNPOD_ENDPOINT_ID"):
-        raise NotImplementedError(
-            "Real RunPodClient is Stage 1 Phase 1.2. Unset RUNPOD_ENDPOINT_ID for mock mode."
+    """Pick the inference client based on INFERENCE_MODE.
+
+    INFERENCE_MODE=mock (default)
+        Returns MockRunPodClient — synthetic predictions or local fixture.
+        Free, deterministic, ideal for frontend dev and unit tests. The
+        real RunPod env vars can stay set in .env without taking effect.
+    INFERENCE_MODE=runpod
+        Real GPU inference. Picks RunPodPodClient if RUNPOD_POD_URL is
+        set; otherwise RunPodClient (serverless) if RUNPOD_ENDPOINT_ID
+        and RUNPOD_API_KEY are both set. Errors loudly if neither.
+    """
+    mode = os.environ.get("INFERENCE_MODE", "mock").strip().lower()
+
+    if mode == "mock":
+        return MockRunPodClient()
+
+    if mode == "runpod":
+        if os.environ.get("RUNPOD_POD_URL"):
+            return RunPodPodClient()
+        if os.environ.get("RUNPOD_ENDPOINT_ID") and os.environ.get("RUNPOD_API_KEY"):
+            return RunPodClient()
+        raise RuntimeError(
+            "INFERENCE_MODE=runpod but neither RUNPOD_POD_URL nor "
+            "(RUNPOD_ENDPOINT_ID + RUNPOD_API_KEY) is configured. "
+            "Set RUNPOD_POD_URL for Pod mode or both serverless vars, "
+            "or switch INFERENCE_MODE back to 'mock'."
         )
-    return MockRunPodClient()
+
+    raise ValueError(
+        f"INFERENCE_MODE={mode!r} not recognized. Use 'mock' or 'runpod'."
+    )

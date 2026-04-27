@@ -1,0 +1,29 @@
+{
+  "name": "sintel_trailer",
+  "display_name": "Sintel Trailer",
+  "source_url": "https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4",
+  "description": "Blender Foundation open-movie trailer, fantasy animation",
+  "license": "CC BY 3.0",
+  "predictions_path": "tests/fixtures/golden_pred_sintel_T53.npy",
+  "predictions_shape": [
+    53,
+    20484
+  ],
+  "region_scores": {
+    "visual_cortex": 64.16927129814889,
+    "fusiform_face": 54.897699021296816,
+    "amygdala": 56.057969996533416,
+    "prefrontal": 51.77910376231528,
+    "temporal_language": 32.485887015050295,
+    "hippocampus": 27.83460477996698,
+    "motor": 61.493932159426656,
+    "reward": 51.742609313317075
+  },
+  "overall_by_goal": {
+    "conversion": 52.95189678492074,
+    "awareness": 50.69603810891583,
+    "engagement": 52.66617156062494,
+    "brand_recall": 45.49810297307818
+  },
+  "registered_at": "2026-04-26T05:53:07Z"
+}
