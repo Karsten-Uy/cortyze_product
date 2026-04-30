@@ -12,20 +12,23 @@ objects for the sidebar. The full BrainReport is fetched separately via
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from core.schemas import AnalyzeRequest, BrainReport, ReportSummary
 from services.persistence.reports import get_store
 from services.storage.r2 import get_client as get_r2
 
 from ..auth import require_user
+from ..limiter import ANALYZE_RATE, limiter
 from ..predict import predict_brain_report
 
 router = APIRouter()
 
 
 @router.post("/analyze", response_model=BrainReport)
+@limiter.limit(ANALYZE_RATE)
 def analyze(
+    request: Request,
     req: AnalyzeRequest,
     user_id: str = Depends(require_user),
 ) -> BrainReport:
@@ -56,21 +59,32 @@ def get_report(
     if report.user_id and report.user_id != user_id:
         raise HTTPException(status_code=404, detail=f"Report {request_id} not found")
 
-    # If the report was persisted with a brain image, mint a fresh
-    # presigned URL on every load (the one stored at create-time may have
-    # expired). The frontend prefers brain_image_uri over the inline b64
-    # for past runs, so this is what makes "view past run" show the image.
+    # Inline the brain image as base64 if R2 has it. The frontend
+    # prefers b64 over the URL — bypasses cross-origin gotchas with
+    # R2 presigned URLs. We still re-mint the URI as a fallback for
+    # any clients that prefer it.
+    #
+    # Use `brain_image_request_id` as the R2 key — for regoal'd reports
+    # this points at the parent's id (the row's own request_id has no
+    # object under it). Falls back to request_id for older rows backfilled
+    # by migration 006 or rows with NULL.
     if report.brain_image_uri:
         r2 = get_r2()
         if r2 is not None:
+            image_id = report.brain_image_request_id or request_id
             try:
-                report.brain_image_uri = r2.presign_brain_image(
-                    request_id, expires=24 * 3600
-                )
+                b64 = r2.fetch_brain_image_b64(image_id)
+                if b64:
+                    report.brain_image_b64 = b64
+                    report.brain_image_uri = r2.presign_brain_image(
+                        image_id, expires=24 * 3600
+                    )
+                # If b64 is None the object is missing under image_id —
+                # leave the stored URI alone rather than overwriting it
+                # with a presigned URL that 404s.
             except Exception:
-                # Presign failure (image deleted, R2 down, etc.) — fall
-                # through with the stale URL; frontend will fail to load
-                # the image but the rest of the report still renders.
+                # R2 down or image deleted — past run renders without
+                # the image but the rest of the report still works.
                 pass
     return report
 

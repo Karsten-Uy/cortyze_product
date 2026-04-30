@@ -186,6 +186,11 @@ class BrainReport(BaseModel):
     # the inline data-uri-friendly form returned to the frontend; either
     # may be set independently (b64 inline for fresh runs, URL for loads).
     brain_image_uri: str | None = None
+    # request_id whose R2 key holds the brain image. Equals `request_id` for
+    # ordinary runs; for a regoal'd run it points at the parent's id, since
+    # the regoal reuses the parent's PNG rather than re-rendering. Lets
+    # /report/{id} fetch / re-presign against the correct key.
+    brain_image_request_id: str | None = None
     elapsed_ms: int
     # Stage 2 fields — populated when temporal pipeline runs (always today;
     # keeping defaults so existing JSON consumers tolerate older payloads).

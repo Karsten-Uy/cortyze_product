@@ -85,10 +85,21 @@ def regoal(
             # Don't carry created_at; let DB default fire.
             "created_at": None,
             # The brain image is goal-independent — same predictions →
-            # same heatmap. Reuse the original's R2-stored URI so the
-            # frontend doesn't re-render or re-upload. The presign in
-            # /report/{id} re-mints a fresh URL at load-time.
+            # same heatmap. Reuse the parent's R2 object instead of
+            # re-uploading. `brain_image_request_id` records which key
+            # actually holds the PNG so /report/{id} re-presigns and
+            # fetches against the correct id (the new request_id has no
+            # object under it).
             "brain_image_uri": original.brain_image_uri,
+            "brain_image_request_id": (
+                original.brain_image_request_id or original.request_id
+            ),
+            # region_timeseries + moments are derived from the cached
+            # raw predictions, which don't change with goal — carry them
+            # over so the regoal'd run shows the same per-second
+            # sparklines and dip/peak chips as its parent.
+            "region_timeseries": original.region_timeseries,
+            "moments": original.moments,
         }
     )
 

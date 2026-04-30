@@ -94,11 +94,13 @@ def predict_brain_report(req: AnalyzeRequest) -> BrainReport:
     # for the immediate response so the frontend doesn't need a second
     # round-trip on first paint.
     brain_image_uri: str | None = None
+    brain_image_request_id: str | None = None
     if r2 is not None and brain_image_b64:
         try:
             import base64
             png_bytes = base64.b64decode(brain_image_b64)
             brain_image_uri = r2.store_brain_image(req.request_id, png_bytes)
+            brain_image_request_id = req.request_id
         except Exception as e:
             _log.warning(
                 "request_id=%s failed to persist brain image to R2: %s",
@@ -119,6 +121,7 @@ def predict_brain_report(req: AnalyzeRequest) -> BrainReport:
         raw_predictions_uri=raw_predictions_uri,
         brain_image_b64=brain_image_b64,
         brain_image_uri=brain_image_uri,
+        brain_image_request_id=brain_image_request_id,
         elapsed_ms=elapsed_ms,
         region_timeseries=region_timeseries,
         moments=moments,

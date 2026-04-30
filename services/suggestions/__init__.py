@@ -112,36 +112,89 @@ def diagnose(
                 e,
             )
             continue
-        suggestions.extend(_to_suggestions(rule, raw))
+        suggestions.extend(
+            _to_suggestions(
+                rule,
+                raw,
+                goal=report.goal,
+                # Aggregate user text the relevance ranker should see:
+                # caption + brand context. Helps surface topically
+                # relevant reference ads when the library is large.
+                user_text=" ".join(
+                    [report.caption_text or "", additional_context or ""]
+                ).strip()
+                or None,
+                user_content_type=report.content_type,
+            )
+        )
     return suggestions
 
 
-def _example_names_for_region(region: str, n: int = 2) -> list[str]:
-    """Pull the top-N reference-ad names that score highest in this region.
+def _example_names_for_rule(
+    region: str,
+    *,
+    goal,
+    user_text: str | None,
+    user_content_type: str | None,
+    n: int = 2,
+) -> list[str]:
+    """Pick the top-N reference-ad names for a given region + goal +
+    content context.
 
-    Lazy import + best-effort fail: if the examples library isn't loadable
-    (no data dir, JSON parse failure, etc.) we return [] rather than
-    breaking suggestions.
+    Best-effort: if the examples library isn't loadable (no data dir,
+    JSON parse failure, etc.) we return [] rather than breaking
+    suggestions. The frontend silently shows "No reference example
+    registered" in that case.
     """
     try:
-        from services.examples.library import top_n_for_region
+        from services.examples.library import best_examples
 
-        return [ad["name"] for ad in top_n_for_region(region, n=n)]
+        return [
+            ad["name"]
+            for ad in best_examples(
+                region=region,
+                goal=goal,
+                user_text=user_text,
+                user_content_type=user_content_type,
+                n=n,
+            )
+        ]
     except Exception:
         return []
 
 
-def _to_suggestions(rule: TriggeredRule, raw) -> list[Suggestion]:
+def _to_suggestions(
+    rule: TriggeredRule,
+    raw,
+    *,
+    goal=None,
+    user_text: str | None = None,
+    user_content_type: str | None = None,
+) -> list[Suggestion]:
     """Coerce an LLM JSON response into validated Suggestion objects.
 
     Each suggestion gets its `examples` field pre-populated with the
-    top reference ads for the rule's region. The frontend's
-    SuggestionCard fetches the full ad details lazily on expand
-    (avoids shipping ~50 KB of example metadata when most users don't
-    click any of them).
+    top reference ads for the rule's region, ranked by region score ×
+    goal relevance × user-content match. The frontend's SuggestionCard
+    fetches the full ad details lazily on expand.
     """
     items = raw if isinstance(raw, list) else raw.get("suggestions", [])
-    example_names = _example_names_for_region(rule.region)
+    if goal is not None:
+        example_names = _example_names_for_rule(
+            rule.region,
+            goal=goal,
+            user_text=user_text,
+            user_content_type=user_content_type,
+        )
+    else:
+        # Backward compat for any callers not passing goal — fall back
+        # to pure region-score ranking via the legacy helper.
+        from services.examples.library import top_n_for_region
+
+        try:
+            example_names = [a["name"] for a in top_n_for_region(rule.region, n=2)]
+        except Exception:
+            example_names = []
     out: list[Suggestion] = []
     for item in items:
         if not isinstance(item, dict):

@@ -13,6 +13,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "matplotlib>=3.8",
     "python-dotenv>=1.0",
+    "slowapi>=0.1",
 ]
 
 [project.optional-dependencies]

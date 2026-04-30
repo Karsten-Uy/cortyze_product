@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import os
 
-from core.schemas import BrainReport, ReportSummary
+from core.schemas import BrainReport, Moment, ReportSummary, Suggestion
 from core.scoring.goals import Goal
 
 
@@ -42,9 +42,13 @@ class ReportsStore:
                     campaign_id, additional_context, caption_text,
                     thumbnail_url, title, content_type,
                     overall_by_goal, audio_url, image_count, seconds_per_image,
-                    brain_image_uri
+                    brain_image_uri, brain_image_request_id,
+                    suggestions, moments, region_timeseries
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s
+                )
                 ON CONFLICT (request_id) DO NOTHING
                 """,
                 (
@@ -66,6 +70,12 @@ class ReportsStore:
                     report.image_count,
                     report.seconds_per_image,
                     report.brain_image_uri,
+                    report.brain_image_request_id,
+                    json.dumps([s.model_dump(mode="json") for s in report.suggestions])
+                    if report.suggestions else None,
+                    json.dumps([m.model_dump(mode="json") for m in report.moments])
+                    if report.moments else None,
+                    json.dumps(report.region_timeseries) if report.region_timeseries else None,
                 ),
             )
 
@@ -78,7 +88,8 @@ class ReportsStore:
                        campaign_id, additional_context, caption_text,
                        thumbnail_url, title, created_at, content_type,
                        overall_by_goal, audio_url, image_count, seconds_per_image,
-                       brain_image_uri
+                       brain_image_uri, brain_image_request_id,
+                       suggestions, moments, region_timeseries
                 FROM reports WHERE request_id = %s
                 """,
                 (request_id,),
@@ -90,6 +101,21 @@ class ReportsStore:
         overall_by_goal = row[14]
         if isinstance(overall_by_goal, str):
             overall_by_goal = json.loads(overall_by_goal)
+        # JSONB columns surface as dict/list when psycopg has the codec
+        # registered, or as str when they don't. Tolerate both.
+        suggestions_raw = row[20]
+        if isinstance(suggestions_raw, str):
+            suggestions_raw = json.loads(suggestions_raw)
+        moments_raw = row[21]
+        if isinstance(moments_raw, str):
+            moments_raw = json.loads(moments_raw)
+        region_timeseries = row[22]
+        if isinstance(region_timeseries, str):
+            region_timeseries = json.loads(region_timeseries)
+        suggestions = (
+            [Suggestion(**s) for s in suggestions_raw] if suggestions_raw else []
+        )
+        moments = [Moment(**m) for m in moments_raw] if moments_raw else []
         return BrainReport(
             # Postgres `uuid` columns surface as `UUID` objects via psycopg;
             # str-cast so Pydantic's `request_id: str` field validates.
@@ -113,6 +139,10 @@ class ReportsStore:
             image_count=row[16],
             seconds_per_image=float(row[17]) if row[17] is not None else None,
             brain_image_uri=row[18],
+            brain_image_request_id=str(row[19]) if row[19] is not None else None,
+            suggestions=suggestions,
+            moments=moments,
+            region_timeseries=region_timeseries,
             elapsed_ms=0,  # not persisted — historical reports have no fresh elapsed time
         )
 

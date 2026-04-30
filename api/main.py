@@ -16,7 +16,10 @@ if "pytest" not in sys.modules:
 
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from slowapi import _rate_limit_exceeded_handler  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
 
+from .limiter import limiter  # noqa: E402
 from .routes import analyze, campaigns, compare, examples, health, regoal  # noqa: E402
 
 _log = logging.getLogger("cortyze.startup")
@@ -48,16 +51,19 @@ def _log_feature_flags() -> None:
         "configured" if os.environ.get("SUPABASE_JWT_SECRET") else "off"
     )
 
-    print("[cortyze] startup feature flags:", flush=True)
-    print(f"  inference:      {inference_mode}", flush=True)
-    print(f"  object storage: {storage}", flush=True)
-    print(f"  persistence:    {persistence}", flush=True)
-    print(f"  auth:           {auth}", flush=True)
-    print(f"  suggestions:    {suggestions} (mode={suggestion_llm})", flush=True)
+    _log.info("startup feature flags:")
+    _log.info("  inference:      %s", inference_mode)
+    _log.info("  object storage: %s", storage)
+    _log.info("  persistence:    %s", persistence)
+    _log.info("  auth:           %s", auth)
+    _log.info("  suggestions:    %s (mode=%s)", suggestions, suggestion_llm)
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Cortyze BrainScore", version="0.0.1")
+
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     origins = [
         o.strip()

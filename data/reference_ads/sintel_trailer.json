@@ -2,7 +2,11 @@
   "name": "sintel_trailer",
   "display_name": "Sintel Trailer",
   "source_url": "https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4",
-  "description": "Blender Foundation open-movie trailer, fantasy animation",
+  "thumbnail_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Sintel_poster.jpg/320px-Sintel_poster.jpg",
+  "description": "Blender Foundation open-movie trailer, fantasy CGI with music and brief dialogue",
+  "caption": "",
+  "tags": ["fantasy", "trailer", "animation", "cinematic", "music"],
+  "content_type": "video",
   "license": "CC BY 3.0",
   "predictions_path": "tests/fixtures/golden_pred_sintel_T53.npy",
   "predictions_shape": [

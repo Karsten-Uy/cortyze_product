@@ -121,6 +121,22 @@ class R2Client:
         key = f"brain_images/{request_id}.png"
         return self._presign_get(self.predictions_bucket, key, expires=expires)
 
+    def fetch_brain_image_b64(self, request_id: str) -> str | None:
+        """Read the stored PNG out of R2 and return base64-encoded bytes.
+
+        Used by /report/{id} to inline the image in the response —
+        sidesteps cross-origin / browser caching issues that can hit
+        presigned URLs when the frontend is on a different domain than R2.
+        Returns None if the object doesn't exist or fetch fails.
+        """
+        import base64
+        key = f"brain_images/{request_id}.png"
+        try:
+            obj = self._client.get_object(Bucket=self.predictions_bucket, Key=key)
+            return base64.b64encode(obj["Body"].read()).decode("ascii")
+        except Exception:
+            return None
+
     def _presign_get(self, bucket: str, key: str, *, expires: int) -> str:
         return self._client.generate_presigned_url(
             "get_object",
