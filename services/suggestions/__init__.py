@@ -39,14 +39,53 @@ def diagnose(
     *,
     llm: LLMClient | None = None,
     content_summary: str | None = None,
+    image_count: int = 0,
+    seconds_per_image: float = 2.5,
+    has_audio: bool = True,
+    additional_context: str | None = None,
 ) -> list[Suggestion]:
-    """Generate Suggestion objects for every triggered rule in the report."""
+    """Generate Suggestion objects for every triggered rule in the report.
+
+    The system + user prompts adapt to the effective content shape:
+      - video → timestamp-anchored cut/reframe/voiceover suggestions
+      - single-image post → image / caption / audio lever suggestions
+      - multi-image post (carousel) → reorder / swap / drop / add image
+        suggestions, dip windows translated into image-range form
+
+    `image_count` decides between the single-image and carousel post
+    prompts; `seconds_per_image` is only consulted for carousels so dip
+    windows can be translated into image-range form before being handed
+    to the LLM.
+
+    `has_audio` controls whether time-series moments are passed to the LLM.
+    For single-image posts without audio, the time axis is synthetic (the
+    image is held for 2.5s as a V-JEPA chunking convenience, not a real
+    moment) and any "audio dip 0:00-0:05" framing the LLM picks up will be
+    a hallucination — we observed both Sonnet and Haiku inventing voiceover
+    fixes for content with no audio. Strip moments in that case so the LLM
+    has no timestamps to anchor on. For videos and carousels and any post
+    that does have audio, moments stay (the timeline is real).
+    """
     rules = trigger_rules(report.region_scores, report.goal)
     if not rules:
         return []
 
     client = llm or get_llm_client()
-    system_prompt = build_system_prompt()
+    system_prompt = build_system_prompt(
+        report.content_type, image_count=image_count
+    )
+
+    is_single_image_post = report.content_type == "post" and image_count <= 1
+    moments_for_prompt = (
+        () if is_single_image_post and not has_audio else report.moments
+    )
+    if is_single_image_post and not has_audio and report.moments:
+        _log.info(
+            "request_id=%s stripping %d moments from prompt "
+            "(single-image post with no audio — time axis is synthetic)",
+            report.request_id,
+            len(report.moments),
+        )
 
     suggestions: list[Suggestion] = []
     for rule in rules:
@@ -56,9 +95,13 @@ def diagnose(
                 user=build_user_prompt(
                     rule,
                     goal=report.goal.value,
-                    moments=report.moments,
+                    content_type=report.content_type,
+                    moments=moments_for_prompt,
                     peer_scores=report.region_scores,
                     content_summary=content_summary,
+                    image_count=image_count,
+                    seconds_per_image=seconds_per_image,
+                    additional_context=additional_context,
                 ),
             )
         except Exception as e:
@@ -73,9 +116,32 @@ def diagnose(
     return suggestions
 
 
+def _example_names_for_region(region: str, n: int = 2) -> list[str]:
+    """Pull the top-N reference-ad names that score highest in this region.
+
+    Lazy import + best-effort fail: if the examples library isn't loadable
+    (no data dir, JSON parse failure, etc.) we return [] rather than
+    breaking suggestions.
+    """
+    try:
+        from services.examples.library import top_n_for_region
+
+        return [ad["name"] for ad in top_n_for_region(region, n=n)]
+    except Exception:
+        return []
+
+
 def _to_suggestions(rule: TriggeredRule, raw) -> list[Suggestion]:
-    """Coerce an LLM JSON response into validated Suggestion objects."""
+    """Coerce an LLM JSON response into validated Suggestion objects.
+
+    Each suggestion gets its `examples` field pre-populated with the
+    top reference ads for the rule's region. The frontend's
+    SuggestionCard fetches the full ad details lazily on expand
+    (avoids shipping ~50 KB of example metadata when most users don't
+    click any of them).
+    """
     items = raw if isinstance(raw, list) else raw.get("suggestions", [])
+    example_names = _example_names_for_region(rule.region)
     out: list[Suggestion] = []
     for item in items:
         if not isinstance(item, dict):
@@ -90,6 +156,9 @@ def _to_suggestions(rule: TriggeredRule, raw) -> list[Suggestion]:
                     why=str(item.get("why", "")),
                     timestamp_start_s=_maybe_float(item.get("timestamp_start_s")),
                     timestamp_end_s=_maybe_float(item.get("timestamp_end_s")),
+                    image_index_start=_maybe_int(item.get("image_index_start")),
+                    image_index_end=_maybe_int(item.get("image_index_end")),
+                    examples=example_names,
                 )
             )
         except (KeyError, ValueError, TypeError):
@@ -102,6 +171,15 @@ def _maybe_float(v) -> float | None:
         return None
     try:
         return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _maybe_int(v) -> int | None:
+    if v is None:
+        return None
+    try:
+        return int(v)
     except (TypeError, ValueError):
         return None
 

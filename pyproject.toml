@@ -23,6 +23,15 @@ suggestions = [
     "anthropic>=0.30",   # native Claude SDK with prompt-caching
 ]
 
+# Stage 3 auth — Supabase JWT verification. Supports two modes:
+# legacy HS256 (just needs PyJWT) and modern JWT Signing Keys
+# (ES256/RS256, requires `cryptography` for asymmetric verification).
+# Pulled in only when the API is run against a real Supabase project.
+# AUTH_DISABLED=true bypasses the dependency entirely for local dev.
+auth = [
+    "PyJWT[crypto]>=2.8",   # crypto extra → cryptography for ES256/RS256/EdDSA
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8",

@@ -280,14 +280,15 @@ Things the next person might want to revisit:
 If you're ramping up on this project:
 
 1. **This file** (HANDOFF.md) — bird's-eye view, you're here
-2. [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) — Stage 1 blueprint with §6 forward-compat decisions and §11 frontend gaps
-3. [README.md](README.md) — local quick-start + env-var → behavior table
-4. [SCALING.md](SCALING.md) — speedup levers, capacity planning, when to invest in which optimization
-5. [docs/runpod_benchmark.md](docs/runpod_benchmark.md) — measured A40 latency / cost / phase breakdown — the source data for SCALING.md
-6. [RUNPOD_SESSION.md](RUNPOD_SESSION.md) — step-by-step RunPod deployment session with troubleshooting log
-7. [gpu_worker/README.md](gpu_worker/README.md) — RunPod deploy + cost-optimization rules
-8. [data/reference_ads/README.md](data/reference_ads/README.md) — Stage 2 reference library + curated video list
-9. The strategy doc (in conversation history with the original Cortyze brief) — product vision, business case, competitive landscape
+2. [LOCAL_DEV.md](LOCAL_DEV.md) — three-terminal local setup, mock-vs-real modes, troubleshooting
+3. [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) — Stage 1 blueprint with §6 forward-compat decisions and §11 frontend gaps
+4. [README.md](README.md) — quick-start + env-var → behavior table
+5. [SCALING.md](SCALING.md) — speedup levers, capacity planning, when to invest in which optimization
+6. [docs/runpod_benchmark.md](docs/runpod_benchmark.md) — measured A40 latency / cost / phase breakdown — the source data for SCALING.md
+7. [RUNPOD_SESSION.md](RUNPOD_SESSION.md) — step-by-step RunPod deployment session with troubleshooting log
+8. [gpu_worker/README.md](gpu_worker/README.md) — RunPod deploy + cost-optimization rules
+9. [data/reference_ads/README.md](data/reference_ads/README.md) — Stage 2 reference library + curated video list
+10. The strategy doc (in conversation history with the original Cortyze brief) — product vision, business case, competitive landscape
 
 For a code tour:
 1. [core/schemas.py](core/schemas.py) — the data shapes

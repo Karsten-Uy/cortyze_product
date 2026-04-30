@@ -310,37 +310,27 @@ Stage 1 doesn't build any of what's below — but the repo skeleton, schemas, an
 
 ---
 
-## 7. Cost estimate (Stage 1 dev + first 100 analyses) — UPDATED with real numbers
+## 7. Cost estimate (Stage 1 dev + first 100 analyses)
 
-Original plan estimated $30–50 for Stage 1 + $0.10–0.20/analysis. Real benchmark numbers from [docs/runpod_benchmark.md](docs/runpod_benchmark.md):
+| Item | Estimate |
+|---|---|
+| Pod (A100 40GB) for ~10 hrs of dev/debug | ~$20 |
+| Image storage (RunPod registry) | ~$0 |
+| Network volume (50GB) | ~$3/mo |
+| 100 analyses on Serverless A100 (avg 15s each) | ~$8 |
+| **Stage 1 total** | **~$30–50** |
 
-| Item | Original estimate | Real |
-|---|---|---|
-| Pod (A40 48GB) for ~10 hrs of dev/debug | ~$20 (A100) | **~$5** (A40 at $0.44/hr × ~10 hr including the bring-up session) |
-| Image storage (GHCR) | ~$0 | $0 |
-| Network volume (50GB) | ~$3/mo | $3.50/mo |
-| Cold call (sintel 52 s, A40) | (not estimated) | **$0.099** (808 s × $0.44/hr) |
-| Warm call (sintel 52 s, p50) | (not estimated) | **$0.085** (692 s) |
-| Warm call (15 s clip, predicted) | (not estimated) | **~$0.028** (227 s) |
-| Warm call (10 s clip, observed) | (not estimated) | **$0.015–$0.026** (124–214 s, resolution-dependent) |
-| 100 analyses on Serverless A40 (15 s clips, post-Tier 1 speedups) | ~$8 (A100) | **~$1.50** |
-| **Stage 1 total realized** | $30–50 | **~$10–15** |
-
-**Reality is at the low end of the original estimate** — closer to $0.02–0.10/analysis depending on clip length and warm/cold state. Update public landing-page copy before Stage 3 with these numbers.
-
-Speedup work in [SCALING.md](SCALING.md) Tier 1 + Tier 2 (~1 week of engineering) brings effective per-call cost to ~$0.01 on cache hits. See SCALING.md for the full lever-by-lever cost model.
+Spec doc claims $0.03–0.08/analysis. Reality on A100 at ~15s/analysis is closer to **$0.10–0.20**. Flagging — does not change Stage 1, but worth re-quoting in the public landing-page copy before Stage 3.
 
 ---
 
 ## 8. Open questions / risks
 
-1. **Amygdala has no cortical surface representation.** TRIBE v2 outputs cortical-only fsaverage5 vertices. The spec hand-waves "cortical proxy." Resolved with insula as documented stand-in (per `core/atlas/regions.py`); revisit when ground-truth ad data is available.
-2. **`neuralset==0.0.2` provenance.** Listed in tribev2 deps. Resolved: installs from PyPI cleanly. Flagged in [RUNPOD_SESSION.md](RUNPOD_SESSION.md) Troubleshooting §A in case it ever breaks.
-3. **Calibration constants are placeholder-quality.** Single-clip baseline from sintel. Will be replaced with cross-clip stats once Stage 2's reference ad library has 30+ clips.
-4. **HF gated model token leak.** `tribev2/run.py` has a hardcoded `HF_TOKEN` (per CLAUDE.md). Do **not** copy that pattern into `cortyze_product/`. Resolved: `gpu_worker/` reads from env, RunPod injects via pod env vars or build secret.
-5. **Mac dev loop for the GPU worker.** Resolved with `INFERENCE_MODE=mock` and `MockRunPodClient` returning the pre-saved CPU-derived fixture — frontend / atlas / scoring work continues offline.
-6. **TRIBE v2 inference is much slower than spec assumed.** Real benchmark on A40 ([docs/runpod_benchmark.md](docs/runpod_benchmark.md)): warm sintel 52 s clip = 660 s ± 60 s; warm 15 s clip predicted ~230 s. 87% of warm time is V-JEPA2-Giant video encoding. **This is structural, not a deployment bug** — the model wasn't designed for interactive inference. Mitigations are in [SCALING.md](SCALING.md): frontend duration cap (15–30 s), `torch.compile`, V-JEPA feature caching, async UX. Tier 1 + Tier 2 levers bring effective latency on multi-goal re-runs to ~80 s.
-7. **Cloudflare proxy timeout (100 s) breaks the cold-call HTTP path.** Resolved by SSH-ing into the pod and curl-ing `localhost:8000` for benchmarks; for production, the async UX in [SCALING.md](SCALING.md) §F sidesteps this entirely (the frontend never holds a single long HTTP connection).
+1. **Amygdala has no cortical surface representation.** TRIBE v2 outputs cortical-only fsaverage5 vertices. The spec hand-waves "cortical proxy." Options: (a) drop amygdala from Stage 1 and ship 7 regions, (b) use insula or orbitofrontal as a documented stand-in, (c) ask the team. Recommend (b) with a docstring note; revisit when we have ground-truth ad data.
+2. **`neuralset==0.0.2` provenance.** Listed in tribev2 deps; needs to resolve on PyPI from the RunPod image. If it's a private Meta package, we'll need to vendor it or use a wheel mirror. Verify in the first hour of Phase 1.2.
+3. **Calibration constants are placeholder-quality.** The 0–100 numbers will look reasonable but aren't grounded until Stage 2's reference ad library exists. Land a `# TODO(stage 2): recalibrate` marker, don't try to perfect this now.
+4. **HF gated model token leak.** `tribev2/run.py` has a hardcoded `HF_TOKEN` (per CLAUDE.md). Do **not** copy that pattern into `cortyze_product/`. Use env var + RunPod build secret only.
+5. **Mac dev loop for the GPU worker.** We can't run `gpu_worker/inference.py` on the Mac. Mitigation: a `--mock` flag on the API server that returns a pre-saved `(T, 20484)` fixture instead of calling RunPod, so frontend / atlas / scoring work continues during pod downtime.
 
 ---
 

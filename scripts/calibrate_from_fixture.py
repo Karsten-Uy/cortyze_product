@@ -1,26 +1,33 @@
-"""Compute per-region (mu, sigma) calibration constants from a real fixture.
+"""Compute per-region (mu, sigma) calibration from the reference fixture pool.
 
 Replaces the placeholder mu=0/sigma=1 in core/scoring/calibration.json with
-values derived from the fixture's (T, 20484) array.
+values derived from ALL `golden_pred_*.npy` files in tests/fixtures/.
 
-Approach (Stage 1 expedient — single clip):
+Approach — multi-clip pooled calibration:
 
-  mu     = mean of per-region means across all 8 regions (i.e., this clip's
-           overall cortical activation baseline). One value, shared.
-  sigma  = std of activations across vertices WITHIN that region (its
-           spatial heterogeneity). Per-region.
+  mu_region    = mean of per-clip region_means across the fixture pool.
+                 Per-region (different for every region). This is the
+                 "expected raw activation for this region across our
+                 reference library."
 
-Why not mu=region_mean: would force every region on this clip to score
-exactly 50, since z = (region_mean - region_mean) = 0 → sigmoid → 50. No
-inter-region differentiation. The snapshot tests would be all-50 forever.
+  sigma_region = mean of per-clip within-region vertex stds.
+                 Per-region. Reflects how heterogeneously the region
+                 fires within a clip; averaged across clips for stability.
 
-Why not mu=0: defensible, but ignores the actual signal scale of THIS
-model on real data. Using the clip's overall baseline as the centerpoint
-means regions *above* baseline (e.g. visual cortex on a video) score >50
-and regions *below* baseline score <50 — which is what you want.
+Why mean-of-vertex-stds and not cross-clip std of region_means?
+  With only n=2 fixtures (typical Stage 1), cross-clip std is a single
+  difference and produces a tiny, brittle sigma that pushes scores to
+  0/100 saturation. Vertex-std averaged across clips is a stable
+  regularizer that captures spatial heterogeneity, which is the dominant
+  source of variation when n is small. As the pool grows past ~10 clips,
+  switch to true cross-clip std (commented at the bottom).
 
-Stage 2 (with ~30 reference clips on RunPod) replaces both fields with
-proper per-region cross-clip statistics.
+Score formula recap (core/scoring/scoring.py):
+  z = (raw_region_mean - mu) / sigma
+  score = sigmoid(z) * 100
+
+So a clip whose region_mean equals mu scores exactly 50 — i.e., the
+"average reference activation". Above-mean → > 50, below → < 50.
 
 Usage:
     uv run python scripts/calibrate_from_fixture.py
@@ -44,44 +51,65 @@ def main() -> int:
     if not fixtures:
         print("ERROR: no golden_pred_*.npy in tests/fixtures/", file=sys.stderr)
         return 1
-    fixture = fixtures[0]
-    print(f"Loading {fixture}")
-    preds = np.load(fixture)
-    if preds.ndim != 2 or preds.shape[1] != 20484:
-        print(f"ERROR: fixture has unexpected shape {preds.shape}", file=sys.stderr)
-        return 1
 
-    time_mean = preds.mean(axis=0)
+    print(f"Pooling {len(fixtures)} reference fixture(s):")
+    per_clip_region_means: dict[str, list[float]] = {r: [] for r in REGION_VERTICES}
+    per_clip_region_sigmas: dict[str, list[float]] = {r: [] for r in REGION_VERTICES}
 
-    per_region_mean = {
-        region: float(time_mean[idx].mean())
-        for region, idx in REGION_VERTICES.items()
-    }
-    clip_baseline = float(np.mean(list(per_region_mean.values())))
+    for fixture in fixtures:
+        preds = np.load(fixture)
+        if preds.ndim != 2 or preds.shape[1] != 20484:
+            print(f"  SKIP {fixture.name}: shape {preds.shape}", file=sys.stderr)
+            continue
+        print(f"  {fixture.name}  shape={preds.shape}")
+        time_mean = preds.mean(axis=0)
+        for region, vertex_idx in REGION_VERTICES.items():
+            region_vals = time_mean[vertex_idx]
+            per_clip_region_means[region].append(float(region_vals.mean()))
+            per_clip_region_sigmas[region].append(float(region_vals.std()))
 
     calibration: dict[str, dict[str, float]] = {}
-    for region, vertex_idx in REGION_VERTICES.items():
-        sigma = float(time_mean[vertex_idx].std())
+    for region in REGION_VERTICES:
+        means = per_clip_region_means[region]
+        sigmas = per_clip_region_sigmas[region]
+        mu = float(np.mean(means))
+        sigma = float(np.mean(sigmas))
         if sigma == 0.0:
             sigma = 1e-3
-        calibration[region] = {"mu": clip_baseline, "sigma": sigma}
+        calibration[region] = {"mu": mu, "sigma": sigma}
 
     calibration_path.write_text(json.dumps(calibration, indent=2) + "\n")
-    print(f"\nClip baseline mu = {clip_baseline:+.4f} (used for all 8 regions)")
-    print(f"Wrote {calibration_path}\n")
-    print(f"  {'region':20s} {'region_mean':>12s} {'sigma':>10s}  → score on this clip")
+    print(f"\nWrote {calibration_path}\n")
+
+    # Show what each fixture would score under the new calibration so you
+    # can spot extreme bias before shipping.
     from math import exp
 
     def _score(raw: float, mu: float, sigma: float) -> float:
         z = (raw - mu) / sigma
         return 100.0 / (1.0 + exp(-z)) if z >= 0 else 100.0 * exp(z) / (1.0 + exp(z))
 
+    print(f"  {'region':20s} {'mu':>10s} {'sigma':>10s}  scores per clip")
     for region, c in calibration.items():
-        rm = per_region_mean[region]
-        s = _score(rm, c["mu"], c["sigma"])
-        print(f"  {region:20s} {rm:>+12.4f} {c['sigma']:>10.4f}  → {s:5.1f}")
+        per_clip = [
+            _score(m, c["mu"], c["sigma"])
+            for m in per_clip_region_means[region]
+        ]
+        score_str = "  ".join(f"{s:5.1f}" for s in per_clip)
+        print(f"  {region:20s} {c['mu']:>+10.4f} {c['sigma']:>10.4f}  {score_str}")
+
+    print(
+        f"\n  (column order = sorted fixture names: "
+        f"{', '.join(f.stem for f in fixtures)})"
+    )
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
+
+# Stage 2 hook — once the reference pool has >= 10 clips, replace
+# `sigma = mean(per-clip vertex stds)` with `sigma = std(per-clip
+# region_means)`. That converts the calibration from "spatial
+# heterogeneity regularizer" to "true cross-clip distribution std",
+# which is what you actually want when n is large enough to estimate it.

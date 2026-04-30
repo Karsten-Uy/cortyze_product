@@ -25,9 +25,13 @@ import numpy as np
 import torch
 
 DEFAULT_VIDEO_URL = "https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4"
-DEFAULT_OUTPUT_STEM = "tests/fixtures/golden_pred_sintel"
 DEFAULT_CACHE_DIR = "../tribev2/cache"
 TRIBEV2_REPO = Path("/Users/kirby/Documents/cortyze/tribev2")
+
+
+def _url_hash(url: str) -> str:
+    """Short content-derived suffix so different URLs cache + write separately."""
+    return hashlib.sha256(url.encode()).hexdigest()[:8]
 
 
 def apply_mac_cpu_patches() -> None:
@@ -118,11 +122,23 @@ def main() -> int:
     parser.add_argument("--video-url", default=DEFAULT_VIDEO_URL)
     parser.add_argument(
         "--output-stem",
-        default=DEFAULT_OUTPUT_STEM,
-        help="Path prefix; _T<n>.npy and _T<n>.meta.json will be appended",
+        default=None,
+        help=(
+            "Path prefix; _T<n>.npy and _T<n>.meta.json will be appended. "
+            "Defaults to tests/fixtures/golden_pred_video_<urlhash> so each "
+            "unique --video-url writes to its own file (no overwrites)."
+        ),
     )
     parser.add_argument("--cache-dir", default=DEFAULT_CACHE_DIR)
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite an existing fixture at the resolved output path.",
+    )
     args = parser.parse_args()
+
+    url_hash = _url_hash(args.video_url)
+    output_stem_value = args.output_stem or f"tests/fixtures/golden_pred_video_{url_hash}"
 
     if not os.environ.get("HF_TOKEN"):
         print(
@@ -137,7 +153,7 @@ def main() -> int:
     cache_dir = Path(args.cache_dir).resolve()
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    output_stem = Path(args.output_stem)
+    output_stem = Path(output_stem_value)
     output_stem.parent.mkdir(parents=True, exist_ok=True)
 
     print("Applying CPU + bf16 patches...", flush=True)
@@ -145,7 +161,9 @@ def main() -> int:
 
     from tribev2.demo_utils import TribeModel, download_file
 
-    video_path = cache_dir / "sample_video.mp4"
+    # Cache filename includes URL hash so different videos don't shadow
+    # each other (the original `sample_video.mp4` had a quiet-reuse bug).
+    video_path = cache_dir / f"video_{url_hash}.mp4"
     if video_path.exists():
         print(f"Reusing cached video {video_path}", flush=True)
     else:
@@ -180,6 +198,14 @@ def main() -> int:
     T = preds.shape[0]
     npy_path = Path(f"{output_stem}_T{T}.npy")
     meta_path = Path(f"{output_stem}_T{T}.meta.json")
+
+    if npy_path.exists() and not args.force:
+        print(
+            f"ERROR: {npy_path} already exists. Pass --force to overwrite, "
+            f"or change --output-stem.",
+            file=sys.stderr,
+        )
+        return 1
 
     np.save(npy_path, preds)
 

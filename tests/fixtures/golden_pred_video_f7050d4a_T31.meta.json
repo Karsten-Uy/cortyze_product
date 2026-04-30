@@ -1,0 +1,22 @@
+{
+  "video_url": "https://5585f9199f8c39df2ed4f9eb05f3fd10.r2.cloudflarestorage.com/cortyze-uploads/uploads/youtube_ad2.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=2643afaa2956c0520d2bd5fa3e3de3ea%2F20260428%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20260428T200103Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=530faed878a7fb67d535d52af5d75d32202ae6468b08ccbcdc94df39eabcf2b5",
+  "video_sha256": "fd9defc2751a3f5d6315a0bddf168a1d0af6067c04eee90dacaca5d81c38e52b",
+  "shape": [
+    31,
+    20484
+  ],
+  "dtype": "float32",
+  "events_kept": {
+    "Audio": 1,
+    "Video": 1,
+    "Sentence": 1,
+    "Word": 1,
+    "Text": 1
+  },
+  "tribev2_commit": "72399081ed3f1040c4d996cefb2864a4c46f5b8e",
+  "model_repo": "facebook/tribev2",
+  "model_revision": "f894e783020944dcd96e5568550afe2aa9743f9f",
+  "generated_at": "2026-04-28T21:49:03Z",
+  "generated_on": "Darwin arm64 (CPU+bf16)",
+  "wall_time_seconds": 6473
+}

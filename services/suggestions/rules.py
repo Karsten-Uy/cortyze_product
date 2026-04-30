@@ -1,19 +1,32 @@
 """Threshold rule engine — decides which regions deserve a suggestion.
 
-Pure logic. No LLM, no I/O. Per the strategy doc:
+Pure logic. No LLM, no I/O.
 
-  weight ≥ 0.20 → Critical (red flag, fix first)
-  weight ≥ 0.10 → Important
-  weight ≥ 0.05 → Minor
-  weight < 0.05 → Ignore
+Two knobs control firing (both env-tunable so you can A/B without code edits):
 
-A region must ALSO score below `score_threshold` (default 50, which is
-the sigmoid-midpoint by construction). Sorted output puts Critical first,
-then by deficit × weight so the most-urgent fix is at the top.
+  SUGGESTION_SCORE_THRESHOLD   region score must be < this to fire.
+                               Default 70.0. Was 50 (sigmoid midpoint);
+                               raised so even "below average" regions fire.
+                               Lower it to be stricter (fewer suggestions).
+
+  SUGGESTION_MIN_WEIGHT        region's goal weight must be >= this.
+                               Default 0.10 (the "important" tier). Was
+                               0.05 (the "minor" tier). Raised to skip
+                               low-weight regions where the marginal cost
+                               of a suggestion isn't worth the goal impact.
+
+Tier classification (after both filters pass):
+  weight >= 0.20 → critical (red flag, fix first)
+  weight >= 0.10 → important
+  weight >= 0.05 → minor   (only reachable if SUGGESTION_MIN_WEIGHT < 0.10)
+
+Sorted output: critical first, then by deficit × weight so the most-urgent
+fix is at the top.
 """
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Literal
 
@@ -37,6 +50,13 @@ _PRIORITY_ORDER: dict[Priority, int] = {
 }
 
 
+# Env-resolved at import time. Restart uvicorn to apply changes.
+DEFAULT_SCORE_THRESHOLD = float(
+    os.environ.get("SUGGESTION_SCORE_THRESHOLD", "70.0")
+)
+DEFAULT_MIN_WEIGHT = float(os.environ.get("SUGGESTION_MIN_WEIGHT", "0.10"))
+
+
 def _classify(weight: float) -> Priority | None:
     if weight >= 0.20:
         return "critical"
@@ -51,15 +71,27 @@ def trigger_rules(
     region_scores: dict[str, float],
     goal: Goal,
     *,
-    score_threshold: float = 50.0,
+    score_threshold: float | None = None,
+    min_weight: float | None = None,
 ) -> list[TriggeredRule]:
-    """Return the regions that warrant a suggestion for this goal."""
+    """Return the regions that warrant a suggestion for this goal.
+
+    Both thresholds default to env-resolved values; pass explicit floats
+    to override (used in tests to pin behavior across env changes).
+    """
+    sthresh = (
+        DEFAULT_SCORE_THRESHOLD if score_threshold is None else score_threshold
+    )
+    mw = DEFAULT_MIN_WEIGHT if min_weight is None else min_weight
+
     weights = GOAL_WEIGHTS[goal]
     out: list[TriggeredRule] = []
     for region, score in region_scores.items():
-        if score >= score_threshold:
+        if score >= sthresh:
             continue
         weight = weights.get(region, 0.0)
+        if weight < mw:
+            continue
         priority = _classify(weight)
         if priority is None:
             continue

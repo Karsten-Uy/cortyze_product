@@ -32,12 +32,24 @@ from pathlib import Path
 # Load non-secret config from .env so vars like R2_ACCOUNT_ID and
 # R2_ACCESS_KEY (which live in .env, not Keychain) are visible. Keychain-
 # loaded secrets (R2_SECRET_KEY, etc.) take precedence because override=False.
+#
+# Also loads the FRONTEND .env.local — the NEXT_PUBLIC_SUPABASE_URL +
+# NEXT_PUBLIC_SUPABASE_ANON_KEY live there (they're public values, safe to
+# read into the same process for the purposes of this check).
 try:
     from dotenv import load_dotenv
 
-    _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
-    if _ENV_PATH.exists():
-        load_dotenv(_ENV_PATH, override=False)
+    _BACKEND_ENV = Path(__file__).resolve().parent.parent / ".env"
+    if _BACKEND_ENV.exists():
+        load_dotenv(_BACKEND_ENV, override=False)
+
+    _FRONTEND_ENV = (
+        Path(__file__).resolve().parent.parent.parent
+        / "cortyze_frontend"
+        / ".env.local"
+    )
+    if _FRONTEND_ENV.exists():
+        load_dotenv(_FRONTEND_ENV, override=False)
 except ImportError:
     # python-dotenv is in pyproject.toml deps; only an issue in stripped envs
     pass
@@ -128,6 +140,26 @@ def check_hf_token() -> tuple[str, str]:
         return _WORKING, f"authenticated as {name}"
     except urllib.error.HTTPError as e:
         return _FAILED, f"HTTP {e.code} from huggingface.co"
+    except Exception as e:
+        return _FAILED, f"{type(e).__name__}: {e}"[:80]
+
+
+def check_anthropic() -> tuple[str, str]:
+    if not _has("ANTHROPIC_API_KEY"):
+        return _NOT_SET, ""
+    try:
+        # GET /v1/models is auth-required but free — no tokens consumed.
+        data = _http_json(
+            "https://api.anthropic.com/v1/models?limit=1",
+            headers={
+                "x-api-key": os.environ["ANTHROPIC_API_KEY"],
+                "anthropic-version": "2023-06-01",
+            },
+        )
+        count = len(data.get("data", []))
+        return _WORKING, f"auth ok ({count} model(s) visible)"
+    except urllib.error.HTTPError as e:
+        return _FAILED, f"HTTP {e.code} from api.anthropic.com"
     except Exception as e:
         return _FAILED, f"{type(e).__name__}: {e}"[:80]
 
@@ -227,6 +259,131 @@ def check_r2_buckets_exist() -> tuple[str, str]:
         return _FAILED, f"{type(e).__name__}: {e}"[:120]
 
 
+def check_supabase_url() -> tuple[str, str]:
+    """Verify NEXT_PUBLIC_SUPABASE_URL points at a real Supabase project."""
+    if not _has("NEXT_PUBLIC_SUPABASE_URL"):
+        return _NOT_SET, ""
+    url = os.environ["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/")
+    # Basic URL shape sanity — Supabase project URLs are always
+    # https://<ref>.supabase.co (or self-hosted). Catch typos early.
+    if not url.startswith("http"):
+        return _FAILED, f"URL must start with https:// (got: {url[:30]})"
+    # Supabase's /auth/v1/settings requires the anon key as the apikey
+    # header. Without it we get 401, which is correct behavior but not
+    # what we want for a connectivity check.
+    headers: dict = {}
+    if _has("NEXT_PUBLIC_SUPABASE_ANON_KEY"):
+        headers["apikey"] = os.environ["NEXT_PUBLIC_SUPABASE_ANON_KEY"]
+    try:
+        data = _http_json(f"{url}/auth/v1/settings", headers=headers)
+        if isinstance(data, dict):
+            providers = [
+                k.replace("external_", "")
+                for k, v in data.items()
+                if k.startswith("external_") and v is True
+            ]
+            providers_msg = (
+                f"{len(providers)} OAuth provider(s)"
+                if providers
+                else "email-only"
+            )
+            return _WORKING, f"reachable · {providers_msg}"
+        return _WORKING, "reachable"
+    except urllib.error.HTTPError as e:
+        if e.code == 401 and not headers:
+            return _FAILED, "401 — set NEXT_PUBLIC_SUPABASE_ANON_KEY too"
+        return _FAILED, f"HTTP {e.code} from {url}/auth/v1/settings"
+    except Exception as e:
+        return _FAILED, f"{type(e).__name__}: {e}"[:80]
+
+
+def check_supabase_anon_key() -> tuple[str, str]:
+    """Verify NEXT_PUBLIC_SUPABASE_ANON_KEY is a valid JWT signed by this project.
+
+    The anon key IS a JWT (issued by Supabase, signed with the project's
+    JWT secret). Decoding without verification confirms shape + project
+    ref; verifying with the secret confirms the key really belongs to
+    this project (not a copy-paste from another project).
+    """
+    if not _has("NEXT_PUBLIC_SUPABASE_ANON_KEY"):
+        return _NOT_SET, ""
+    try:
+        import jwt
+    except ImportError:
+        return _FAILED, "PyJWT not installed (uv sync --extra auth)"
+
+    key = os.environ["NEXT_PUBLIC_SUPABASE_ANON_KEY"]
+    try:
+        payload = jwt.decode(key, options={"verify_signature": False})
+    except Exception as e:
+        return _FAILED, f"not a valid JWT: {type(e).__name__}: {e}"[:80]
+    role = payload.get("role")
+    iss = payload.get("iss", "")
+    if role != "anon":
+        return _FAILED, f"expected role='anon' got role='{role}'"
+
+    # Cross-check: project ref in the iss claim should match the URL.
+    if _has("NEXT_PUBLIC_SUPABASE_URL"):
+        url = os.environ["NEXT_PUBLIC_SUPABASE_URL"]
+        if iss and iss not in url and "/auth/v1" not in iss:
+            # iss looks like https://<ref>.supabase.co/auth/v1
+            ref_in_iss = iss.replace("https://", "").split(".")[0]
+            ref_in_url = url.replace("https://", "").split(".")[0]
+            if ref_in_iss and ref_in_url and ref_in_iss != ref_in_url:
+                return (
+                    _FAILED,
+                    f"anon key is for project '{ref_in_iss}' but URL is '{ref_in_url}'",
+                )
+
+    # Cross-check: if SUPABASE_JWT_SECRET is set, the key should verify
+    # against it. This is the strongest test — proves both values come
+    # from the same project.
+    if _has("SUPABASE_JWT_SECRET"):
+        try:
+            jwt.decode(
+                key,
+                os.environ["SUPABASE_JWT_SECRET"],
+                algorithms=["HS256"],
+                # The anon key uses aud='authenticated' or none; tolerate both.
+                options={"verify_aud": False},
+            )
+            return _WORKING, "anon JWT verified against JWT secret"
+        except jwt.InvalidSignatureError:
+            return (
+                _FAILED,
+                "JWT signature mismatch — SUPABASE_JWT_SECRET and anon key are for different projects",
+            )
+        except Exception as e:
+            return _PRESENT, f"shape ok; signature check failed: {e}"[:80]
+
+    return _PRESENT, f"role={role}, iss={iss[:40]}"
+
+
+def check_supabase_jwt_secret() -> tuple[str, str]:
+    """Verify SUPABASE_JWT_SECRET is set and usable for signing/verification."""
+    if not _has("SUPABASE_JWT_SECRET"):
+        return _NOT_SET, ""
+    try:
+        import jwt
+    except ImportError:
+        return _FAILED, "PyJWT not installed (uv sync --extra auth)"
+    secret = os.environ["SUPABASE_JWT_SECRET"]
+    if len(secret) < 20:
+        return _FAILED, f"secret looks too short ({len(secret)} chars)"
+    try:
+        # Round-trip a synthetic token through the secret. If both sides
+        # work, the secret is viable for HS256 verification.
+        token = jwt.encode(
+            {"sub": "test", "aud": "authenticated"},
+            secret,
+            algorithm="HS256",
+        )
+        jwt.decode(token, secret, algorithms=["HS256"], audience="authenticated")
+        return _WORKING, "HS256 sign+verify round-trip ok"
+    except Exception as e:
+        return _FAILED, f"{type(e).__name__}: {e}"[:80]
+
+
 def check_database() -> tuple[str, str]:
     if not _has("DATABASE_URL"):
         return _NOT_SET, ""
@@ -239,14 +396,39 @@ def check_database() -> tuple[str, str]:
             with conn.cursor() as cur:
                 cur.execute("SELECT version()")
                 version = cur.fetchone()[0].split(",")[0]
-                cur.execute("SELECT to_regclass('public.reports')::text")
-                row = cur.fetchone()
-                table_msg = (
-                    "reports table OK"
-                    if row[0]
-                    else "reports table MISSING — run services/persistence/migrations/001_reports.sql"
-                )
-        return _WORKING, f"{version} · {table_msg}"
+                # Validate every table our migrations should have created.
+                expected = {
+                    "reports": "001_reports.sql",
+                    "ad_campaigns": "002_campaigns_and_context.sql",
+                }
+                missing: list[str] = []
+                for tbl, mig in expected.items():
+                    cur.execute(
+                        "SELECT to_regclass(%s)::text", (f"public.{tbl}",)
+                    )
+                    if not cur.fetchone()[0]:
+                        missing.append(f"{tbl} (run {mig})")
+
+                # Stage 3 columns added by 002. If reports exists but
+                # campaign_id doesn't, migration 002 hasn't been applied.
+                if "reports" not in [m.split(" ")[0] for m in missing]:
+                    cur.execute(
+                        """
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_schema='public' AND table_name='reports'
+                          AND column_name IN ('campaign_id', 'additional_context', 'title')
+                        """
+                    )
+                    have = {r[0] for r in cur.fetchall()}
+                    needed = {"campaign_id", "additional_context", "title"}
+                    if not needed.issubset(have):
+                        missing.append(
+                            f"reports.{','.join(sorted(needed - have))} cols (run 002_campaigns_and_context.sql)"
+                        )
+
+        if missing:
+            return _FAILED, f"{version} · MISSING: {'; '.join(missing)}"
+        return _WORKING, f"{version} · all tables + Stage 3 columns present"
     except Exception as e:
         return _FAILED, f"{type(e).__name__}: {e}"[:120]
 
@@ -264,20 +446,33 @@ def main() -> int:
         "yes",
     )
     llm_mode = os.environ.get("SUGGESTION_LLM_MODE", "mock").strip().lower()
+    auth_disabled = os.environ.get("AUTH_DISABLED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    auth_label = "DISABLED (dev only)" if auth_disabled else (
+        "configured" if os.environ.get("SUPABASE_JWT_SECRET") else "off"
+    )
 
     print("Configuration (non-secret):")
     print(f"  inference mode:      {inference}")
     print(f"  suggestions:         {'enabled' if suggestions else 'disabled'} (mode={llm_mode})")
     print(f"  S3 endpoint:         {os.environ.get('S3_ENDPOINT_URL') or '(R2 production)'}")
+    print(f"  auth:                {auth_label}")
     print()
 
     checks = [
         ("GITHUB_PAT", check_github_pat),
         ("HF_TOKEN", check_hf_token),
+        ("ANTHROPIC_API_KEY", check_anthropic),
         ("RUNPOD_API_KEY", check_runpod),
         ("R2/MinIO auth", check_r2),
         ("R2 named buckets", check_r2_buckets_exist),
         ("DATABASE_URL", check_database),
+        ("SUPABASE_JWT_SECRET", check_supabase_jwt_secret),
+        ("SUPABASE_URL (frontend)", check_supabase_url),
+        ("SUPABASE_ANON_KEY", check_supabase_anon_key),
     ]
 
     print("Secrets:")

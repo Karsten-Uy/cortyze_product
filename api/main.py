@@ -17,7 +17,7 @@ if "pytest" not in sys.modules:
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from .routes import analyze, health  # noqa: E402
+from .routes import analyze, campaigns, compare, examples, health, regoal  # noqa: E402
 
 _log = logging.getLogger("cortyze.startup")
 
@@ -41,10 +41,18 @@ def _log_feature_flags() -> None:
     ) else "disabled"
     suggestion_llm = os.environ.get("SUGGESTION_LLM_MODE", "mock").strip().lower()
 
+    auth_disabled = os.environ.get("AUTH_DISABLED", "").strip().lower() in (
+        "1", "true", "yes",
+    )
+    auth = "DISABLED (dev only)" if auth_disabled else (
+        "configured" if os.environ.get("SUPABASE_JWT_SECRET") else "off"
+    )
+
     print("[cortyze] startup feature flags:", flush=True)
     print(f"  inference:      {inference_mode}", flush=True)
     print(f"  object storage: {storage}", flush=True)
     print(f"  persistence:    {persistence}", flush=True)
+    print(f"  auth:           {auth}", flush=True)
     print(f"  suggestions:    {suggestions} (mode={suggestion_llm})", flush=True)
 
 
@@ -65,6 +73,10 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(analyze.router)
+    app.include_router(campaigns.router)
+    app.include_router(compare.router)
+    app.include_router(examples.router)
+    app.include_router(regoal.router)
     _log_feature_flags()
     return app
 

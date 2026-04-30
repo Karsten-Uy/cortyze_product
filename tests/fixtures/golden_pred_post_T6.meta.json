@@ -1,0 +1,28 @@
+{
+  "content_type": "post",
+  "image_url": "https://instagram.fcxh2-1.fna.fbcdn.net/v/t51.82787-15/627649940_18564291112063529_9053410149840842668_n.jpg?stp=dst-jpg_e35_tt6&_nc_cat=107&ig_cache_key=MzgyOTc5NzUyNjUwNjE2MTY1Nw%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjE0NDB4MTQ0MC5zZHIuQzMifQ%3D%3D&_nc_ohc=jM9AbJTui6cQ7kNvwHrCS67&_nc_oc=AdpFww_eMET7-fhJ29RsoDMYoMO5BOeP1JxK6SqTu4ic_ZRu6ebHnTOAQZETXvs9LZg&_nc_ad=z-m&_nc_cid=0&_nc_zt=23&_nc_ht=instagram.fcxh2-1.fna&_nc_gid=7qEEwm6Tz5OjFl3hwRwiXw&_nc_ss=7a22e&oh=00_Af2LmO-ldn1ZanfB3VrsO0lE56jOFpH_gxNqtzp0__pV5g&oe=69F6BA3A",
+  "image_sha256": "83336fd25fddb92a8f62c8c019101d8dd43b54ef9e59828f8083422148f7a006",
+  "audio_url": "https://5585f9199f8c39df2ed4f9eb05f3fd10.r2.cloudflarestorage.com/cortyze-uploads/uploads/pepsi%20ad%20read.m4a?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=2643afaa2956c0520d2bd5fa3e3de3ea%2F20260428%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20260428T162955Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=b9447fa92c82df0fcf57798485e8fdcdc1d5afa7742c33e7b4dd2b79fcfd9ee4",
+  "audio_sha256": "e831d748f585870c0267980b1579b31ca048a95f453c1f2e91ee118402fd5ec3",
+  "caption": "Treat yourself! Pepsi Cola Cream Soda is here to stay \u2014 now available in Regular and Zero Sugar.",
+  "seconds_per_image": 2.5,
+  "synthetic_video_duration_s": 2.5,
+  "shape": [
+    6,
+    20484
+  ],
+  "dtype": "float32",
+  "events_kept": {
+    "Audio": 1,
+    "Video": 1,
+    "Sentence": 1,
+    "Text": 1,
+    "Word": 1
+  },
+  "tribev2_commit": "72399081ed3f1040c4d996cefb2864a4c46f5b8e",
+  "model_repo": "facebook/tribev2",
+  "model_revision": "f894e783020944dcd96e5568550afe2aa9743f9f",
+  "generated_at": "2026-04-28T16:55:20Z",
+  "generated_on": "Darwin arm64 (CPU+bf16)",
+  "wall_time_seconds": 1094
+}

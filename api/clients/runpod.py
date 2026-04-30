@@ -39,8 +39,24 @@ class PredictResponse:
 
 
 class RunPodClientProtocol(Protocol):
-    def predict(self, content_url: str, content_type: str) -> PredictResponse:
-        """Return predictions + timestamped events for the given content."""
+    def predict(
+        self,
+        content_url: str | None = None,
+        content_type: str = "video",
+        *,
+        image_urls: list[str] | None = None,
+        audio_url: str | None = None,
+        caption: str | None = None,
+        seconds_per_image: float = 2.5,
+    ) -> PredictResponse:
+        """Return predictions + timestamped events for the given content.
+
+        Two input shapes:
+          - video: pass content_url + content_type='video' (default)
+          - post:  pass content_type='post' + image_urls (1-20 entries),
+                   optionally audio_url and/or caption. The same shape
+                   covers single-image posts and N-image carousels.
+        """
         ...
 
 
@@ -63,7 +79,19 @@ class MockRunPodClient:
             Path(__file__).resolve().parents[2] / "tests" / "fixtures"
         )
 
-    def predict(self, content_url: str, content_type: str) -> PredictResponse:
+    def predict(
+        self,
+        content_url: str | None = None,
+        content_type: str = "video",
+        *,
+        image_urls: list[str] | None = None,
+        audio_url: str | None = None,
+        caption: str | None = None,
+        seconds_per_image: float = 2.5,
+    ) -> PredictResponse:
+        # The mock layer doesn't actually inspect the inputs — fixtures
+        # are deterministic. The post-mode params are accepted so the
+        # signature matches the protocol; tests cover both shapes.
         for fixture in sorted(self.fixtures_dir.glob("golden_pred_*.npy")):
             preds = np.load(fixture)
             if preds.ndim == 2 and preds.shape[1] == 20484:
@@ -127,9 +155,25 @@ class RunPodPodClient:
         self.url = os.environ["RUNPOD_POD_URL"].rstrip("/")
         self.timeout = int(os.environ.get("RUNPOD_TIMEOUT_SECONDS", "300"))
 
-    def predict(self, content_url: str, content_type: str) -> PredictResponse:
+    def predict(
+        self,
+        content_url: str | None = None,
+        content_type: str = "video",
+        *,
+        image_urls: list[str] | None = None,
+        audio_url: str | None = None,
+        caption: str | None = None,
+        seconds_per_image: float = 2.5,
+    ) -> PredictResponse:
         body = json.dumps(
-            {"content_url": content_url, "content_type": content_type}
+            _build_request_body(
+                content_url=content_url,
+                content_type=content_type,
+                image_urls=image_urls,
+                audio_url=audio_url,
+                caption=caption,
+                seconds_per_image=seconds_per_image,
+            )
         ).encode("utf-8")
         req = urllib.request.Request(
             f"{self.url}/predict",
@@ -161,10 +205,28 @@ class RunPodClient:
         self.endpoint_id = os.environ["RUNPOD_ENDPOINT_ID"]
         self.timeout = int(os.environ.get("RUNPOD_TIMEOUT_SECONDS", "300"))
 
-    def predict(self, content_url: str, content_type: str) -> PredictResponse:
+    def predict(
+        self,
+        content_url: str | None = None,
+        content_type: str = "video",
+        *,
+        image_urls: list[str] | None = None,
+        audio_url: str | None = None,
+        caption: str | None = None,
+        seconds_per_image: float = 2.5,
+    ) -> PredictResponse:
         url = f"https://api.runpod.ai/v2/{self.endpoint_id}/runsync"
         body = json.dumps(
-            {"input": {"content_url": content_url, "content_type": content_type}}
+            {
+                "input": _build_request_body(
+                    content_url=content_url,
+                    content_type=content_type,
+                    image_urls=image_urls,
+                    audio_url=audio_url,
+                    caption=caption,
+                    seconds_per_image=seconds_per_image,
+                )
+            }
         ).encode("utf-8")
         req = urllib.request.Request(
             url,
@@ -191,6 +253,29 @@ class RunPodClient:
         if output is None:
             raise RuntimeError(f"RunPod returned no output (status={status}): {payload}")
         return _decode_predict_payload(output)
+
+
+def _build_request_body(
+    *,
+    content_url: str | None,
+    content_type: str,
+    image_urls: list[str] | None,
+    audio_url: str | None,
+    caption: str | None,
+    seconds_per_image: float,
+) -> dict:
+    """Build the worker's input dict, omitting None values for cleanliness."""
+    body: dict = {"content_type": content_type}
+    if content_url is not None:
+        body["content_url"] = content_url
+    if image_urls is not None:
+        body["image_urls"] = list(image_urls)
+        body["seconds_per_image"] = seconds_per_image
+    if audio_url is not None:
+        body["audio_url"] = audio_url
+    if caption is not None:
+        body["caption"] = caption
+    return body
 
 
 def _decode_predict_payload(output: dict) -> PredictResponse:

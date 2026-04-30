@@ -97,6 +97,37 @@ class R2Client:
         )
         return f"r2://{self.predictions_bucket}/{key}"
 
+    def store_brain_image(self, request_id: str, png_bytes: bytes) -> str:
+        """Upload the rendered brain heatmap PNG. Returns a presigned GET
+        URL valid for 7 days — long enough for the user to come back and
+        revisit a recent run, short enough that we re-mint on each report
+        load (the report endpoint re-presigns on demand).
+
+        We use a presigned URL (not a public bucket URL) so the predictions
+        bucket can stay private."""
+        key = f"brain_images/{request_id}.png"
+        self._client.put_object(
+            Bucket=self.predictions_bucket,
+            Key=key,
+            Body=png_bytes,
+            ContentType="image/png",
+        )
+        return self._presign_get(self.predictions_bucket, key, expires=7 * 24 * 3600)
+
+    def presign_brain_image(self, request_id: str, expires: int = 24 * 3600) -> str:
+        """Mint a fresh presigned URL for an already-uploaded brain image.
+        Called by the report-fetch path so URLs in stored reports stay valid
+        beyond the original 7-day window."""
+        key = f"brain_images/{request_id}.png"
+        return self._presign_get(self.predictions_bucket, key, expires=expires)
+
+    def _presign_get(self, bucket: str, key: str, *, expires: int) -> str:
+        return self._client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=expires,
+        )
+
 
 _client: R2Client | None = None
 

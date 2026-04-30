@@ -59,8 +59,12 @@ def _serialize(arr: np.ndarray, events_df) -> dict:
 def _predict_payload(input_data: dict) -> dict:
     t0 = time.monotonic()
     arr, events_df = _get_predictor().predict(
-        input_data["content_url"],
-        input_data.get("content_type", "video"),
+        content_url=input_data.get("content_url"),
+        content_type=input_data.get("content_type", "video"),
+        image_urls=input_data.get("image_urls"),
+        audio_url=input_data.get("audio_url"),
+        caption=input_data.get("caption"),
+        seconds_per_image=float(input_data.get("seconds_per_image", 2.5)),
     )
     payload = _serialize(arr, events_df)
     payload["elapsed_ms"] = int((time.monotonic() - t0) * 1000)
