@@ -33,3 +33,6 @@ dist/
 
 # Local feature cache from build_fixture.py runs
 cache/
+
+# Test results
+results/
