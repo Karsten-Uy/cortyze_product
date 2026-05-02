@@ -24,6 +24,14 @@ suggestions = [
     "anthropic>=0.30",   # native Claude SDK with prompt-caching
 ]
 
+# Used by scripts/analyze_instagram_reels.py to download reels by URL.
+# Install in whichever venv runs the script — for the local Mac CPU TRIBE
+# path that's the tribev2 venv (`/Users/kirby/Documents/cortyze/tribev2/.venv`),
+# not this project's uv venv.
+reels = [
+    "yt-dlp>=2025.0.0",
+]
+
 # Stage 3 auth — Supabase JWT verification. Supports two modes:
 # legacy HS256 (just needs PyJWT) and modern JWT Signing Keys
 # (ES256/RS256, requires `cryptography` for asymmetric verification).

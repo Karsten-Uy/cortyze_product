@@ -1,6 +1,6 @@
 # cortyze_product
 
-Stage 1 backend for [BrainScore](IMPLEMENTATION_PLAN.md) — a JSON API that turns content (video/image/text) into 8 brain-region scores plus a goal-weighted overall score.
+Stage 1 backend for [BrainScore](docs/IMPLEMENTATION_PLAN.md) — a JSON API that turns content (video/image/text) into 8 brain-region scores plus a goal-weighted overall score.
 
 ## Quick start
 
@@ -49,11 +49,11 @@ The API auto-degrades based on env vars — every dependency is optional. Infere
 
 Switching between mock and real GPU is a single-line `.env` change. Same for storage backend (`STORAGE_MODE`).
 
-**Inference latency reality** — see [SCALING.md](SCALING.md) and [docs/runpod_benchmark.md](docs/runpod_benchmark.md) for measured numbers. Brief version: real-mode `/analyze` takes 3–12 minutes depending on clip length. Mock mode returns instantly. Plan async UX accordingly.
+**Inference latency reality** — see [docs/SCALING.md](docs/SCALING.md) and [docs/runpod_benchmark.md](docs/runpod_benchmark.md) for measured numbers. Brief version: real-mode `/analyze` takes 3–12 minutes depending on clip length. Mock mode returns instantly. Plan async UX accordingly.
 
 ## Account setup (to leave mock mode)
 
-See [IMPLEMENTATION_PLAN.md §11](IMPLEMENTATION_PLAN.md) for the full Stage 3 prerequisite list. Stage 1 needs three:
+See [IMPLEMENTATION_PLAN.md §11](docs/IMPLEMENTATION_PLAN.md) for the full Stage 3 prerequisite list. Stage 1 needs three:
 
 ### 1. Hugging Face — `HF_TOKEN`
 
@@ -98,7 +98,7 @@ After all three are set, restart the API. `/upload-url` and `/report/{id}` will 
 
 ### RunPod GPU deployment
 
-The GPU worker is fully wired and validated. Step-by-step deployment (image build, network volume, Pod or Serverless): [RUNPOD_SESSION.md](RUNPOD_SESSION.md). Measured cost / latency / phase breakdown: [docs/runpod_benchmark.md](docs/runpod_benchmark.md). Speedup roadmap with realistic gains: [SCALING.md](SCALING.md).
+The GPU worker is fully wired and validated. Step-by-step deployment (image build, network volume, Pod or Serverless): [docs/RUNPOD_SESSION.md](docs/RUNPOD_SESSION.md). Measured cost / latency / phase breakdown: [docs/runpod_benchmark.md](docs/runpod_benchmark.md). Speedup roadmap with realistic gains: [docs/SCALING.md](docs/SCALING.md).
 
 ## Running tests
 

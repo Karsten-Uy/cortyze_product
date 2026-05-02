@@ -51,12 +51,14 @@ def _log_feature_flags() -> None:
         "configured" if os.environ.get("SUPABASE_JWT_SECRET") else "off"
     )
 
+    cors_origins = os.environ.get("FRONTEND_ORIGINS", "http://localhost:3000")
     _log.info("startup feature flags:")
     _log.info("  inference:      %s", inference_mode)
     _log.info("  object storage: %s", storage)
     _log.info("  persistence:    %s", persistence)
     _log.info("  auth:           %s", auth)
     _log.info("  suggestions:    %s (mode=%s)", suggestions, suggestion_llm)
+    _log.info("  cors origins:   %s", cors_origins)
 
 
 def create_app() -> FastAPI:

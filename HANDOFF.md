@@ -15,7 +15,7 @@ If you just inherited this project, read this first. ~10 minutes for orientation
 - **Storage** — R2 client coded, MinIO running locally as a stand-in. Switch via `STORAGE_MODE` env var. Supabase Postgres provisioned, schema migrated.
 - **Tests** — 59 passing. CPU-derived golden fixture (sintel trailer, 53 timesteps) drives the e2e regression test.
 
-**Inference reality check:** TRIBE v2 is a research model designed for batched offline runs, not interactive inference. Warm latency is ~660 s for a 52 s clip on A40, dominated 87% by V-JEPA2-Giant video encoding. See [SCALING.md](SCALING.md) for the speedup tiers (Tier 1 free wins drop a 15 s clip to ~150 s effective with feature caching). Plan async UX, not real-time.
+**Inference reality check:** TRIBE v2 is a research model designed for batched offline runs, not interactive inference. Warm latency is ~660 s for a 52 s clip on A40, dominated 87% by V-JEPA2-Giant video encoding. See [docs/SCALING.md](docs/SCALING.md) for the speedup tiers (Tier 1 free wins drop a 15 s clip to ~150 s effective with feature caching). Plan async UX, not real-time.
 
 ---
 
@@ -25,7 +25,7 @@ Six product stages from the strategy doc. Roughly:
 
 | Stage | What it ships | % done | What's blocked on |
 |---|---|---|---|
-| **1 — Engine** | TRIBE v2 → 8 region scores → goal-weighted overall via JSON API | ~95% | Cross-clip calibration; Tier 1 speedup work (see [SCALING.md](SCALING.md)) |
+| **1 — Engine** | TRIBE v2 → 8 region scores → goal-weighted overall via JSON API | ~95% | Cross-clip calibration; Tier 1 speedup work (see [docs/SCALING.md](docs/SCALING.md)) |
 | **2 — Diagnostic layer** | Suggestion engine (Claude) + reference ad library + matched examples in UI | 5% (lib scaffolded, 1 ad registered) | Stage 1 done; needs 3–5 more reference ad fixtures |
 | **3 — Landing page** | Marketing copy, waitlist signups, Vercel deploy at custom domain | 0% (frontend scaffold exists) | Stage 1 demo-ready; copy + design |
 | **4 — Account linking** | Instagram/TikTok OAuth, audience-brain profiling | 0% | Stage 3 acquiring users first |
@@ -178,9 +178,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ blocked on user / external ·
 - ✅ Supabase provisioned + migration run
 - ✅ Cloudflare R2 provisioned + CORS configured
 - ✅ RunPod end-to-end pipeline validated on A40 — see [docs/runpod_benchmark.md](docs/runpod_benchmark.md)
-- 🚧 **Tier 1 speedup work** (frontend cap, `torch.compile`, visual-only audio skip, resolution downscale) — ~3× combined warm-call speedup. See [SCALING.md](SCALING.md).
-- 🚧 **V-JEPA feature caching** (Tier 2, ~1 day) — biggest single product win, ~7× effective speedup on multi-goal re-runs. See [SCALING.md](SCALING.md) §E.
-- 🚧 **Async UX with progress polling** (Tier 2) — required given 5–10 min real latency. See [SCALING.md](SCALING.md) §F.
+- 🚧 **Tier 1 speedup work** (frontend cap, `torch.compile`, visual-only audio skip, resolution downscale) — ~3× combined warm-call speedup. See [docs/SCALING.md](docs/SCALING.md).
+- 🚧 **V-JEPA feature caching** (Tier 2, ~1 day) — biggest single product win, ~7× effective speedup on multi-goal re-runs. See [docs/SCALING.md](docs/SCALING.md) §E.
+- 🚧 **Async UX with progress polling** (Tier 2) — required given 5–10 min real latency. See [docs/SCALING.md](docs/SCALING.md) §F.
 - 🚧 §6 concurrency probe + §8 failure-mode tests in [docs/runpod_benchmark.md](docs/runpod_benchmark.md) (~20 min, $0.15)
 - ⏸ Cross-clip calibration with 30 reference clips
 - ⏸ Phase 7 RunPod Serverless conversion + benchmark
@@ -248,7 +248,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ blocked on user / external ·
 
 ## Forward-compat decisions that paid off
 
-These were called out in [IMPLEMENTATION_PLAN.md §6](IMPLEMENTATION_PLAN.md). They cost ~zero to add at Stage 1 and unlock Stages 2–6 + Mirofish without rewrites:
+These were called out in [docs/IMPLEMENTATION_PLAN.md §6](docs/IMPLEMENTATION_PLAN.md). They cost ~zero to add at Stage 1 and unlock Stages 2–6 + Mirofish without rewrites:
 
 1. **`Goal` is a typed enum** ([core/scoring/goals.py](core/scoring/goals.py)) — Stage 2's suggestion threshold rules and Stage 4's audience profile both consume the same values. Stringly-typed goals would have pattern-match-bugged in every later stage.
 2. **`request_id` end-to-end** — UUID at API entry, in every log line, in Supabase, in the R2 prediction filename. Stage 4 joins engagement data on this; Stage 5 joins training data on this. Without it, neither is reconstructible.
@@ -263,14 +263,14 @@ These were called out in [IMPLEMENTATION_PLAN.md §6](IMPLEMENTATION_PLAN.md). T
 Things the next person might want to revisit:
 
 1. **Single-clip calibration is a placeholder.** [core/scoring/calibration.json](core/scoring/calibration.json) was derived from one Mac-CPU run of sintel. The shared `mu` (clip-baseline) and per-region `sigma` (within-region std) give meaningful inter-region differentiation, but absolute scores are only meaningful relative to other content. **Replace with 30-clip cross-clip statistics post-RunPod.** Schema is stable; just rewrite the JSON.
-2. **Amygdala uses insula as a cortical proxy.** TRIBE v2 outputs cortical surface vertices only; the amygdala is subcortical. Insula is the documented stand-in (see [core/atlas/regions.py](core/atlas/regions.py) + [IMPLEMENTATION_PLAN.md §8](IMPLEMENTATION_PLAN.md)). Re-evaluate when ground-truth ad data is available.
+2. **Amygdala uses insula as a cortical proxy.** TRIBE v2 outputs cortical surface vertices only; the amygdala is subcortical. Insula is the documented stand-in (see [core/atlas/regions.py](core/atlas/regions.py) + [docs/IMPLEMENTATION_PLAN.md §8](docs/IMPLEMENTATION_PLAN.md)). Re-evaluate when ground-truth ad data is available.
 3. **`neuralset==0.0.2` install risk on RunPod.** Listed as a tribev2 transitive dep; needs to resolve from PyPI inside the Docker image. If it doesn't, the fallback is to vendor or use a wheel mirror — not yet hit, but flagged.
 4. **Brain PNG rendering is ~1.85s per request.** Acceptable for Stage 1 but adds latency. Easy follow-ups: lower DPI from 80→60, render asynchronously and SSE-stream the result, or render on the frontend (compute-heavy lifting in WebGL).
 5. **MinIO is not reachable from RunPod.** The drag-drop upload path posts to `localhost:9000`, which the cloud GPU worker can't fetch. For end-to-end pipeline tests against real GPU, you need real Cloudflare R2 (or test via direct public URLs like the sintel CDN). Migration is documented in [README.md](README.md) §3.2.
 6. **`tribev2/run.py` has a hardcoded `HF_TOKEN`.** Per the workspace [CLAUDE.md](../CLAUDE.md), do not propagate that pattern. `scripts/build_fixture.py` correctly reads from env. Keep an eye on it if you ever pull updates from upstream tribev2.
 7. **`caudalmiddlefrontal` not represented in our DK label vocabulary.** The Destrieux→DK projection in [scripts/build_atlas_labels.py](scripts/build_atlas_labels.py) doesn't subdivide `G_front_middle`, so `regions.py`'s "caudalmiddlefrontal" entry has zero vertices. Stage 2 can fix with proper FreeSurfer aparc.
-8. **Inference is genuinely slow and that's structural, not a bug.** A 52 s clip takes 5–12 min on an A40 because V-JEPA2-Giant is 1B params and processes video in 64-frame chunks. The model wasn't built for interactive use. Treat this as a product constraint and design accordingly: **frontend should cap clips at 15 s and use async UX with progress polling**. Full speedup roadmap with realistic gains lives in [SCALING.md](SCALING.md).
-9. **Warm latency has ±15% variance.** Across 4 sintel runs we saw 602–717 s range. The fastest run was an outlier; typical p50 is ~692 s. Quote ranges to users ("6–12 minutes for ~1 minute clips"), never point estimates. `torch.compile` should reduce this jitter — see [SCALING.md](SCALING.md) §B.
+8. **Inference is genuinely slow and that's structural, not a bug.** A 52 s clip takes 5–12 min on an A40 because V-JEPA2-Giant is 1B params and processes video in 64-frame chunks. The model wasn't built for interactive use. Treat this as a product constraint and design accordingly: **frontend should cap clips at 15 s and use async UX with progress polling**. Full speedup roadmap with realistic gains lives in [docs/SCALING.md](docs/SCALING.md).
+9. **Warm latency has ±15% variance.** Across 4 sintel runs we saw 602–717 s range. The fastest run was an outlier; typical p50 is ~692 s. Quote ranges to users ("6–12 minutes for ~1 minute clips"), never point estimates. `torch.compile` should reduce this jitter — see [docs/SCALING.md](docs/SCALING.md) §B.
 10. **The `S3_ENDPOINT_URL`-based MinIO/R2 switch is fragile.** Replaced with explicit `STORAGE_MODE=off|minio|r2` env var. If your `.env` predates this change, both the legacy auto-detect path and the new explicit one work, but new setups should use `STORAGE_MODE`.
 
 ---
@@ -280,12 +280,12 @@ Things the next person might want to revisit:
 If you're ramping up on this project:
 
 1. **This file** (HANDOFF.md) — bird's-eye view, you're here
-2. [LOCAL_DEV.md](LOCAL_DEV.md) — three-terminal local setup, mock-vs-real modes, troubleshooting
-3. [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) — Stage 1 blueprint with §6 forward-compat decisions and §11 frontend gaps
+2. [docs/LOCAL_DEV.md](docs/LOCAL_DEV.md) — three-terminal local setup, mock-vs-real modes, troubleshooting
+3. [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) — Stage 1 blueprint with §6 forward-compat decisions and §11 frontend gaps
 4. [README.md](README.md) — quick-start + env-var → behavior table
-5. [SCALING.md](SCALING.md) — speedup levers, capacity planning, when to invest in which optimization
+5. [docs/SCALING.md](docs/SCALING.md) — speedup levers, capacity planning, when to invest in which optimization
 6. [docs/runpod_benchmark.md](docs/runpod_benchmark.md) — measured A40 latency / cost / phase breakdown — the source data for SCALING.md
-7. [RUNPOD_SESSION.md](RUNPOD_SESSION.md) — step-by-step RunPod deployment session with troubleshooting log
+7. [docs/RUNPOD_SESSION.md](docs/RUNPOD_SESSION.md) — step-by-step RunPod deployment session with troubleshooting log
 8. [gpu_worker/README.md](gpu_worker/README.md) — RunPod deploy + cost-optimization rules
 9. [data/reference_ads/README.md](data/reference_ads/README.md) — Stage 2 reference library + curated video list
 10. The strategy doc (in conversation history with the original Cortyze brief) — product vision, business case, competitive landscape
