@@ -661,17 +661,35 @@ def run_batch(
                     flush=True,
                 )
 
-    print("\nApplying Mac CPU + bf16 patches...", flush=True)
-    _apply_mac_cpu_patches()
+    # Auto-detect device. CPU patches + bf16 are required on Mac (8GB
+    # RAM) but actively harm a CUDA box (force model off GPU). Skip them
+    # whenever a CUDA device is available.
+    import torch  # local import — torch is required either way
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    if device == "cpu":
+        print("\nApplying Mac CPU + bf16 patches...", flush=True)
+        _apply_mac_cpu_patches()
+    else:
+        print(
+            f"\nCUDA detected ({torch.cuda.get_device_name(0)}); "
+            "skipping Mac CPU patches.",
+            flush=True,
+        )
 
     from tribev2.demo_utils import TribeModel  # noqa: E402
 
-    print("Loading TribeModel (first run pulls ~10GB to ~/.cache/huggingface/)...", flush=True)
+    hf_cache = os.environ.get("HF_HOME", "~/.cache/huggingface/")
+    print(
+        f"Loading TribeModel onto {device} "
+        f"(first run pulls ~10GB to {hf_cache})...",
+        flush=True,
+    )
     t_load = time.monotonic()
     model = TribeModel.from_pretrained(
         "facebook/tribev2",
         cache_folder=cache_dir,
-        device="cpu",
+        device=device,
     )
     print(f"Model ready ({int(time.monotonic() - t_load)}s).\n", flush=True)
 

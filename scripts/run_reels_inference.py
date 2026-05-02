@@ -13,6 +13,8 @@ For the CLI / file-driven variant, see scripts/analyze_instagram_reels.py.
 """
 from __future__ import annotations
 
+import os
+
 # ---------------------------------------------------------------------------
 # EDIT THIS BLOCK
 # ---------------------------------------------------------------------------
@@ -249,7 +251,12 @@ NO_CAPTION = False
 KEEP_VIDEOS = False
 
 # Where TribeModel caches weights and where reel mp4s land during a run.
-CACHE_DIR = "/Users/kirby/Documents/cortyze/tribev2/cache"
+# Override on RunPod (or any non-Mac box) by exporting CORTYZE_CACHE_DIR
+# before running, e.g. `export CORTYZE_CACHE_DIR=/workspace/cache`.
+CACHE_DIR = os.environ.get(
+    "CORTYZE_CACHE_DIR",
+    "/Users/kirby/Documents/cortyze/tribev2/cache",
+)
 
 # Pass to yt-dlp for IG-restricted reels (age-gated, region-locked, etc.).
 # Set to "firefox", "chrome", "safari", etc. None = no cookies.
