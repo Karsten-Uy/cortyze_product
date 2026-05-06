@@ -20,7 +20,17 @@ from slowapi import _rate_limit_exceeded_handler  # noqa: E402
 from slowapi.errors import RateLimitExceeded  # noqa: E402
 
 from .limiter import limiter  # noqa: E402
-from .routes import analyze, campaigns, compare, examples, health, regoal  # noqa: E402
+from .routes import (  # noqa: E402
+    analyze,
+    campaigns,
+    compare,
+    examples,
+    health,
+    profile,
+    regoal,
+    runs,
+    upload,
+)
 
 _log = logging.getLogger("cortyze.startup")
 
@@ -44,6 +54,11 @@ def _log_feature_flags() -> None:
     ) else "disabled"
     suggestion_llm = os.environ.get("SUGGESTION_LLM_MODE", "mock").strip().lower()
 
+    # v2 (`/runs`) modes — separate from the legacy /analyze suggestion engine.
+    trends_mode = os.environ.get("TRENDS_MODE", "mock").strip().lower()
+    synthesis_mode = os.environ.get("SYNTHESIS_MODE", "mock").strip().lower()
+    validation_mode = os.environ.get("VALIDATION_MODE", "mock").strip().lower()
+
     auth_disabled = os.environ.get("AUTH_DISABLED", "").strip().lower() in (
         "1", "true", "yes",
     )
@@ -58,6 +73,9 @@ def _log_feature_flags() -> None:
     _log.info("  persistence:    %s", persistence)
     _log.info("  auth:           %s", auth)
     _log.info("  suggestions:    %s (mode=%s)", suggestions, suggestion_llm)
+    _log.info("  v2 trends:      %s", trends_mode)
+    _log.info("  v2 synthesis:   %s", synthesis_mode)
+    _log.info("  v2 validation:  %s", validation_mode)
     _log.info("  cors origins:   %s", cors_origins)
 
 
@@ -85,6 +103,9 @@ def create_app() -> FastAPI:
     app.include_router(compare.router)
     app.include_router(examples.router)
     app.include_router(regoal.router)
+    app.include_router(runs.router)  # v2 pipeline (POST/GET /runs, SSE)
+    app.include_router(upload.router)  # POST /upload-url (presigned R2 PUT)
+    app.include_router(profile.router)  # GET/PATCH /me
     _log_feature_flags()
     return app
 

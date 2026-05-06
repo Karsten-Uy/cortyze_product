@@ -72,8 +72,15 @@ def test_report_endpoint_stubbed():
 
 
 def test_upload_url_stubbed():
-    r = client.post("/upload-url")
-    assert r.status_code == 501
+    # The v2 endpoint validates the JSON body shape (filename / content_type
+    # / size) before reaching the R2 client; without those it 422s. With
+    # them, in mock mode (STORAGE_MODE=off, no R2_* env), the route returns
+    # 503 — that's what "stubbed" means now.
+    r = client.post(
+        "/upload-url",
+        json={"filename": "x.mp4", "content_type": "video/mp4", "size": 1024},
+    )
+    assert r.status_code == 503
 
 
 def test_cors_allowed_origin():

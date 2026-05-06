@@ -145,6 +145,7 @@ def require_user(
     """
     if _is_dev_bypass():
         request.state.user_id = _DEV_BYPASS_USER
+        request.state.user_email = None
         return _DEV_BYPASS_USER
 
     if creds is None or not creds.credentials:
@@ -184,7 +185,12 @@ def require_user(
             detail="token missing 'sub' claim",
         )
 
+    # Email is optional on the JWT (e.g., service tokens have no email)
+    # but Supabase user-session tokens always carry it. Stash on
+    # request.state so the profile route can default the display name
+    # from it without re-decoding.
     request.state.user_id = user_id
+    request.state.user_email = payload.get("email")
     request.state.access_token = creds.credentials
     return user_id
 

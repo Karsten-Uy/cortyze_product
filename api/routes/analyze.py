@@ -118,15 +118,8 @@ def list_reports(
     }
 
 
-@router.post("/upload-url")
-def upload_url(
-    content_type: str = "video/mp4",
-    user_id: str = Depends(require_user),
-) -> dict[str, str]:
-    r2 = get_r2()
-    if r2 is None:
-        raise HTTPException(
-            status_code=501,
-            detail="Object storage not configured. Set R2_ACCOUNT_ID/R2_ACCESS_KEY/R2_SECRET_KEY/R2_BUCKET_UPLOADS env vars.",
-        )
-    return r2.mint_upload_url(content_type=content_type)
+# NOTE: legacy POST /upload-url removed. The v2 surface lives in
+# api/routes/upload.py with a stricter contract (JSON body, mime/size
+# allowlist). Both routes pointed at the same R2 client; collapsing to
+# one avoids the shadowing footgun where the first-registered router
+# (this one) intercepted requests intended for the new endpoint.

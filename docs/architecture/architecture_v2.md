@@ -1,9 +1,21 @@
 ***
 
-# Architecture Plan: Neuro-Social Content Engine
+# Architecture Plan: Neuro-Social Content Audit Engine
 
 ## 1. System Overview
-This architecture processes video content through a dual-pipeline: extracting biological engagement metrics via neural encoding, and gathering real-time cultural context via a knowledge graph. These distinct data streams are synthesized by a frontier LLM to generate actionable editing suggestions, which are then stress-tested in a simulated multi-agent social environment. A final execution phase carries the suggested edits through to a rendered video, routing mechanical changes to a self-hosted compositor and generative changes to a pool of third-party model APIs (Runway, ElevenLabs, Suno, Veo). All third-party generative compute is metered and recovered through a credit-based billing system, so user charges scale with actual wholesale cost while preserving margin.
+
+Cortyze takes ad creative (video, image, or carousel) plus a campaign brief and produces a single composite score, a six-region brain-activity breakdown, and a ranked list of actionable suggestions for improving the creative.
+
+It does this by running two parallel pipelines:
+
+1. **Biological engagement** — feed the media through a multimodal fMRI encoder (TRIBE v2) and reduce 70k predicted voxels to six brain regions that map cleanly to ad-effectiveness primitives (memory, emotion, attention, language, face recognition, reward).
+2. **Social context** — query a rolling knowledge graph of recent web/cultural signal to ground recommendations in what's currently working in the wild.
+
+Both streams write to a state DB and an async orchestrator hands the joined payload to Claude, which synthesizes a **Suggestion Plan**. That plan is then stress-tested in a multi-agent social simulation (MiroFish) which annotates each suggestion with a predicted lift in %.
+
+The Cortyze frontend renders the entire result as a `Lab Bench → Analyzing → Results` flow. There is no editor, no rendering tier, and no billing tier in this build — Cortyze ships as a **pre-flight audit and recommendation product**.
+
+> **Out of scope for this build.** Phase 5 (generative edit execution via Runway / ElevenLabs / Suno / FFmpeg compositor) and Phase 6 (credit-based PAYG billing) from earlier drafts of this document are removed. The product surface is `Score → Suggest`, not `Score → Suggest → Render`.
 
 ## 2. System Architecture Diagram
 
@@ -14,190 +26,205 @@ graph TD
     classDef rag fill:#00b894,stroke:#55efc4,stroke-width:2px,color:#fff;
     classDef synth fill:#e17055,stroke:#fab1a0,stroke-width:2px,color:#fff;
     classDef sim fill:#0984e3,stroke:#74b9ff,stroke-width:2px,color:#fff;
-    classDef exec fill:#d63031,stroke:#ff7675,stroke-width:2px,color:#fff;
-    classDef billing fill:#00cec9,stroke:#81ecec,stroke-width:2px,color:#000;
     classDef db fill:#f39c12,stroke:#f1c40f,stroke-width:2px,color:#fff;
+    classDef fe fill:#1a1a1a,stroke:#d4613e,stroke-width:2px,color:#f5f2ed;
 
-    %% Inputs
-    Input[User Input: Video + Campaign Context]:::input --> Split{Data Router}
+    Input[Lab Bench: media + campaign + goal]:::fe --> Split{Run dispatcher}
 
-    %% DB / State Management
-    StateDB[(PostgreSQL / SQLite Handoff)]:::db
+    StateDB[(Postgres / Supabase)]:::db
 
-    %% Phase 1: Neural Pipeline
-    subgraph Phase 1: Biological Engagement
+    subgraph p1 ["Phase 1 - Biological Engagement"]
         Split --> Tribe[TRIBE v2 Encoder]:::neuro
-        Tribe --> Interpreter[Signal Translator]:::neuro
-        Interpreter --> NeuroScore[Neuro-Metrics: Reward, Prefrontal]:::neuro
+        Tribe --> Reducer["Voxel to 6 region scores"]:::neuro
     end
 
-    %% Phase 2: Context Pipeline
-    subgraph Phase 2: Social Context
-        LiveStream[(Scraping / API Firehose)]:::rag --> GraphRAG[GraphRAG / Neo4j]:::rag
+    subgraph p2 ["Phase 2 - Social Context"]
+        LiveStream[(News / Trend firehose)]:::rag --> GraphRAG[GraphRAG / Neo4j]:::rag
         Split --> GraphRAG
-        GraphRAG --> Context[Trending Entities & Sentiment]:::rag
+        GraphRAG --> Context[Trends, sentiment, references]:::rag
     end
 
-    %% State Storage
-    NeuroScore -.-> StateDB
+    Reducer -.-> StateDB
     Context -.-> StateDB
 
-    %% Phase 3: Synthesis
-    subgraph Phase 3: Strategy Generation
-        StateDB -.-> Claude[Claude 3.5 / Synthesis LLM]:::synth
-        Claude --> Suggestions[Structured Edit Plan JSON]:::synth
+    subgraph p3 ["Phase 3 - Suggestion Synthesis"]
+        StateDB -.-> Claude[Claude]:::synth
+        Claude --> Plan[Suggestion Plan JSON]:::synth
     end
 
-    %% Phase 4: Simulation
-    subgraph Phase 4: Validation Swarm
-        Suggestions --> MiroFish[MiroFish Engine]:::sim
+    subgraph p4 ["Phase 4 - Validation Swarm"]
+        Plan --> MiroFish[MiroFish OASIS Engine]:::sim
         StateDB -.-> MiroFish
-        MiroFish --> Swarm[100+ Agent Social Simulation]:::sim
-        Swarm --> Report[Virality & Performance Analysis]:::sim
+        MiroFish --> Lift[Per-suggestion predicted lift]:::sim
     end
 
-    %% Phase 5: Edit Execution & PAYG Billing
-    subgraph Phase 5: Edit Execution
-        Suggestions --> Router{Edit Router}:::exec
-        Report -.-> Router
-        Router -->|mechanical| Compositor[FFmpeg / Remotion Renderer]:::exec
-        Router -->|generative| GenPool[Generative Provider Pool]:::exec
-        GenPool --> Runway[Runway Gen-4 Turbo]:::exec
-        GenPool --> Eleven[ElevenLabs Voice]:::exec
-        GenPool --> Suno[Suno / Music API]:::exec
-        Compositor --> FinalRender[Composite & Encode]:::exec
-        GenPool --> FinalRender
-    end
+    Plan -.-> StateDB
+    Lift -.-> StateDB
 
-    %% Billing Layer
-    subgraph Billing & Metering
-        UserAcct[User Account / Stripe]:::billing --> Wallet[Credit Wallet Service]:::billing
-        Router -.->|pre-flight check| Wallet
-        GenPool -.->|usage events| Meter[Metering Service]:::billing
-        Compositor -.->|usage events| Meter
-        Meter --> Wallet
-        Wallet -.->|overage charge| UserAcct
-    end
-
-    %% Output
-    FinalRender --> CDN[CDN / R2 Delivery]:::input
-    CDN --> Final[Client Dashboard]
-    Report --> Final
-    Suggestions --> Final
-    Final:::input
+    StateDB --> Results[Results view: score + regions + suggestions]:::fe
 ```
 
 ## 3. Component Breakdown & Data Flow
 
-### Phase 1: Biological Engagement (The "Gut Reaction")
-*   **Module:** TRIBE v2 (Meta AI).
-*   **Function:** Processes the raw video file through a multi-modal encoder block (V-JEPA2, Wav2Vec-BERT, LLaMA 3.2).
-*   **Data Transformation:** Converts 70,000 predicted fMRI voxels into structured JSON scores. A lightweight translator maps brain regions to marketing-friendly metrics (e.g., *Nucleus Accumbens* $\rightarrow$ `Reward_Potential: 0.85`).
-*   **Resource Footprint:** Extremely High VRAM (28–32 GB). Must be flushed from GPU memory upon completion if running sequentially on local hardware.
+### Phase 1 — Biological Engagement
+*   **Module:** TRIBE v2 (Meta AI), `facebook/tribev2` on HuggingFace.
+*   **Function:** Multimodal encoder (V-JEPA2 + Wav2Vec-BERT + LLaMA 3.2) that predicts cortical fMRI activations from the input media.
+*   **Reducer:** A pure-python step that maps 20,484 fsaverage5 vertices to 6 named regions and normalizes each to a 0–100 score. The 6 regions are fixed:
 
-### Phase 2: Social Context (The "Vibe Check")
-*   **Module:** GraphRAG (Neo4j / NetworkX).
-*   **Function:** Maintains a rolling 48-hour knowledge graph of current internet trends, memes, and news cycles. 
-*   **Data Transformation:** Queries the graph against the video's metadata/transcript to pull relevant external context. For example, if the video is about a specific brand, it pulls the current public sentiment for that brand.
-*   **Resource Footprint:** High System RAM (16–32 GB) to hold the entity relationship matrix. 
+    | Key | Label | Source region |
+    |---|---|---|
+    | `memory` | Memory | Hippocampus |
+    | `emotion` | Emotion | Amygdala |
+    | `attention` | Attention | Visual cortex |
+    | `language` | Language | Temporal lobe |
+    | `face` | Face recognition | Fusiform face area |
+    | `reward` | Reward | NAcc / VTA |
 
-### Phase 3: Strategy Generation (The "Consultant")
-*   **Module:** Claude (Anthropic API).
-*   **Function:** Acts as the synthesizer. It takes the user's initial goals, the TRIBE neuro-score, and the GraphRAG cultural context to identify friction points.
-*   **Output Format:** A structured **Edit Plan JSON** (not prose), so each suggested edit is independently routable in Phase 5. Each edit object specifies type (`trim`, `caption`, `b_roll`, `voice_replace`, `music_swap`, `style_transfer`), target timestamp, parameters, predicted lift, and provider hint.
-*   **Example Prompt Structure:** 
-    > *"The TRIBE data indicates the user's attention drops at 0:05 (low prefrontal activation). The GraphRAG data shows the topic is currently trending, but mostly in a sarcastic context. Suggest 3 specific edits to the pacing and script to align with current trends and maintain viewer retention. Return as Edit Plan JSON."*
+*   **Resource footprint:** 28–32 GB VRAM during inference. Must be evicted from GPU memory before Phase 4 runs if both share a card. In practice this runs on a remote GPU (RunPod) and the frontend never blocks on local hardware.
+*   **Latency reality:** 3–12 minutes end-to-end for typical short-form video. The frontend's `Analyzing` view is a placeholder animation; production must show real progress (per-region completion events, see §5).
 
-### Phase 4: Validation Swarm (The "Digital Market")
-*   **Module:** MiroFish (OASIS Engine).
-*   **Function:** Simulates the actual release of the proposed content with an AB test.
-*   **Execution:** Spawns a multi-agent swarm (e.g., 100 agents using a fast/cheap API like Groq or a local quantized LLM). The agents are initialized with biases derived from the GraphRAG trends and the TRIBE neuro-scores. They interact, comment, and share the "post," producing baseline metrics. Suggested edits from Phase 3 are then re-simulated to produce a delta forecast.
-*   **Gating Role:** The simulation delta is what justifies firing a costly generative edit downstream. An edit with predicted uplift below a configurable threshold is dropped or marked optional, so users do not spend on Tier 3 generation that the model doesn't believe will move metrics.
-*   **Output:** Generates a statistical breakdown of simulated performance, including projected sentiment polarity, shareability, and potential brand-risk flags, plus per-edit predicted lift used by the Edit Router.
+### Phase 2 — Social Context
+*   **Module:** GraphRAG over Neo4j (or NetworkX for dev).
+*   **Function:** Maintains a rolling 48-hour knowledge graph of trending entities, references, and sentiment. Queries are keyed off the user's brief / caption / detected media topics.
+*   **Output:** Two things land in the state DB:
+    1.  Sentiment + trend snapshot relevant to the campaign topic.
+    2.  A short-list of 3–6 **reference campaigns** with comparable goal and recent performance — these are what the Suggestion view shows under "Reference" cards.
+*   **Resource footprint:** 16–32 GB system RAM for the entity matrix. CPU-only.
 
-### Phase 5: Edit Execution (The "Builder")
-This phase converts the Edit Plan JSON into a rendered video, routing each edit to the cheapest provider that can fulfill it.
+### Phase 3 — Suggestion Synthesis
+*   **Module:** Anthropic Claude (Sonnet 4.6 by default; the project supports Opus 4.7 for harder cases).
+*   **Function:** Reads the joined payload (six region scores + their benchmark gaps + the GraphRAG trend context + the user's stated goal) and emits a structured **Suggestion Plan JSON** matching the exact shape the Results view consumes. No prose. No "thoughts" preamble.
+*   **Output schema** (this is the contract — the frontend at `cortyze_frontend/lib/cortyze-data.ts` uses these field names verbatim):
 
-*   **Edit Router.** A stateless dispatcher that reads each edit object and selects a backend. Mechanical edits (trim, caption, overlay, format swap, audio level) route to the self-hosted compositor. Generative edits (B-roll synthesis, voice cloning, music generation, style transfer) route to the Generative Provider Pool. Before any edit fires, the router calls the Credit Wallet for a pre-flight balance check and reserves the estimated credit cost.
-*   **Self-Hosted Compositor.** FFmpeg plus Remotion. Runs in the worker pool on CPU instances. Handles all Tier 1 edits at near-zero marginal cost. This is the default execution layer.
-*   **Generative Provider Pool.** A thin abstraction over third-party model APIs:
-    *   **Runway Gen-4 Turbo** for B-roll, transitions, style transfer (default visual generator).
-    *   **Runway Gen-4** as a premium tier for higher-fidelity output when the user opts in.
-    *   **ElevenLabs** for voice replacement, voice cloning, and TTS for new VO.
-    *   **Suno or equivalent** for music generation.
-    *   **Veo / Kling** as alternates for visual generation when Runway quotas are saturated or the use case fits better.
-    *   The pool exposes one normalized interface so the rest of the system never knows which provider ran a given job.
-*   **Final Composite & Encode.** All Tier 1 outputs and Tier 3 generated assets are stitched by FFmpeg into the final timeline, encoded for the target platform (TikTok, Reels, Shorts), and pushed to R2 storage with a CDN-fronted URL.
-*   **Resource Footprint:** Compositor runs on commodity CPU. Generative calls are fully outsourced, so no local GPU is required for Phase 5. Render queue uses Temporal or BullMQ workers.
+    ```ts
+    type SuggestionPlan = {
+      score:     number;            // composite 0..100
+      benchmark: number;            // category benchmark 0..100
+      delta:     number;            // signed delta vs user's last run
+      status:    "Needs work" | "Solid" | "Strong" | "Hero";
+      regions:   {
+        key:       "memory" | "emotion" | "attention"
+                 | "language" | "face" | "reward";
+        score:     number;          // 0..100
+        benchmark: number;          // 0..100
+      }[];
+      suggestions: {
+        id:          number;
+        priority:    "critical" | "high" | "medium";
+        title:       string;        // imperative, ≤ 50 chars
+        area:        RegionKey;     // which region this targets
+        lift:        number;        // expected % lift, e.g. 8.2
+        explanation: string;        // 2-4 sentences, plain English
+        reference:   {              // optional — null if no good match
+          brand:    string;
+          campaign: string;
+          note:     string;
+          scoreA:   number; labelA: string;  // e.g. 82, "Memory"
+          scoreB:   number; labelB: string;  // e.g. 91, "Overall"
+        } | null;
+      }[];
+    }
+    ```
 
-### Phase 6: Billing & Metering (Cost Recovery Layer)
-The generative tier is expensive enough that subsidizing it across all users is not viable. This phase exists so that wholesale third-party costs flow through to the user as metered consumption with a margin markup.
+*   **Goal weighting.** The user's selected goal (one of `Brand recall`, `Purchase intent`, `Emotional resonance`, `Trust`, `Attention`) re-weights the 6 region scores into the composite. The composite is recomputed deterministically — Claude does **not** decide it. Claude only decides which suggestions to surface and ranks them.
+*   **Prompt shape.** A short system prompt + the joined state DB record + a strict JSON output schema. Use prompt caching on the system prompt and the schema; cache hit rate should sit above 90% in steady state.
+*   **Failure mode.** If Claude returns malformed JSON, retry with a tightened schema reminder; if it fails twice, surface a synthetic fallback plan generated from the region gaps alone (no trend context). The frontend always shows a Suggestion Plan; never an empty results page.
 
-*   **Credit Wallet Service.** Maintains a per-user balance denominated in **internal credits**, abstracted away from any specific provider's pricing unit. Users see one number rising and falling, not "Runway credits plus ElevenLabs characters plus Suno seconds."
-*   **Metering Service.** Listens to job-completion events from the Compositor and Generative Pool. For every completed unit of work, it logs (a) the provider, (b) the wholesale cost in USD, (c) the equivalent credit charge to the user, and (d) the margin captured. This is the source of truth for both cost reconciliation with vendors and revenue recognition with users.
-*   **Stripe Integration.** Two billable surfaces:
-    1.  **Subscription tier billing** for monthly base plans, each of which includes a fixed credit allowance.
-    2.  **Metered overage billing** for any consumption beyond the included allowance, charged at the end of the billing period or in batched increments to avoid per-edit transaction overhead.
-*   **Pre-Flight Cost Estimation.** Before a generative edit fires, the router estimates its credit cost using known provider rates and reserves that amount in the wallet. If the user has insufficient credits and overage billing is disabled, the edit is blocked and the user is prompted to upgrade or top up. If overage is enabled, the job proceeds and the overage is added to the next invoice.
+### Phase 4 — Validation Swarm
+*   **Module:** MiroFish (OASIS engine) — see `cortyze/MiroFish`.
+*   **Function:** Spawns ~100 lightweight agents seeded with biases derived from the GraphRAG sentiment snapshot and the TRIBE region gaps. Agents react to the original creative, then each suggested edit, producing a delta forecast.
+*   **What it writes back.** For each `suggestion.id` in the Plan, MiroFish returns a `lift` value that overwrites the heuristic lift Claude proposed. This is the single number the user sees as "+8.2 expected lift" in the Results view.
+*   **Gating:** Suggestions whose simulated lift falls below a configurable floor (default `1.5%`) are hidden from the surfaced list but kept in the DB for audit.
+*   **Resource footprint:** ~100 short-lived agent threads × a fast LLM (Groq, Cerebras, or a local quantized model). Does **not** require the same GPU as Phase 1 — they run sequentially anyway, so a single network volume is fine.
 
-## 4. Subscription Tiers & Unit Economics
+## 4. State Management & Handoffs
 
-The pricing model is hybrid: a flat monthly subscription that includes a baseline credit pool, plus pay-as-you-go overage at a fixed rate per credit. The architecture treats "credit" as a unit of abstract compute that maps to a USD-denominated wholesale cost on the backend.
+Heavy modules never pass payloads in memory — every handoff goes through Postgres. This lets the GPU process exit between phases (freeing 30 GB VRAM) and lets the orchestrator be a thin async coordinator rather than a long-running monolith.
 
-### 4.1 Credit Definition
-1 credit = approximately $0.005 wholesale cost. Retail price to user: $0.01 per credit. This implies a **2x markup** on third-party generative compute, which is roughly the floor for sustainable margin once support, storage, egress, and orchestration overhead are factored in.
+### 4.1 Tables
 
-### 4.2 Provider Cost Mapping (illustrative)
+| Table | Purpose |
+|---|---|
+| `runs` | One row per user-initiated analysis. Holds inputs, status, timestamps. |
+| `region_scores` | `(run_id, region_key, score, benchmark)` — six rows per run. |
+| `composites` | `(run_id, score, benchmark, delta, status)` — one row per run, computed after region_scores land. |
+| `trend_context` | `(run_id, payload_json)` — GraphRAG snapshot used by Claude. Kept for audit. |
+| `suggestions` | `(run_id, ord, priority, title, area, lift, explanation, reference_json)`. Lift is updated in-place by Phase 4. |
+| `past_runs_view` | Materialized view of `(run_id, name, kind, score, created_at)` for the sidebar. |
 
-| Operation | Wholesale cost | Credit charge to user |
+### 4.2 Execution sequence
+
+1.  Frontend POSTs to `/runs` with the Lab Bench input. Backend writes a `runs` row in `status=queued`, returns `run_id`.
+2.  Phase 1 picks up the job, runs TRIBE on RunPod, writes 6 `region_scores` rows, sets `status=neuro_done`.
+3.  Phase 2 (running concurrently) writes `trend_context`, sets `status=context_done` if neuro already done, else `status=context_done_partial`.
+4.  Once both flags are set, the orchestrator triggers Claude with the joined payload. Claude's output writes `composites` and `suggestions`. `status=plan_done`.
+5.  MiroFish picks up `plan_done` runs, simulates each suggestion, updates `suggestions.lift`. `status=complete`.
+6.  Frontend either polls `GET /runs/:id` or subscribes to a realtime channel. As soon as `status=complete` (or `plan_done`, if Phase 4 is slow), it transitions `analyzing → results`.
+
+### 4.3 What this drops vs. the previous draft
+
+* `edit_jobs`, `credit_wallets`, `usage_events`, `subscriptions` — all four tables and the entire Stripe metering layer are removed. Cortyze is not metering generative compute because Cortyze does not run generative compute.
+* The "Edit Router" module is gone.
+* Pricing tiers and the credit unit economics section are gone. If/when the audit product gets paywalled, it becomes a flat subscription (`Free` = read-only, `Pro` = full suggestion plan + history) — much simpler than the credit accounting the editor would have required.
+
+## 5. Frontend Contract
+
+The Cortyze frontend (`cortyze_frontend/`) consumes exactly four endpoints. Match the field names in `cortyze_frontend/lib/cortyze-data.ts` exactly — the components type-check against those names and any drift breaks the Results view silently.
+
+### 5.1 Endpoints
+
+| Method · Path | Body / Query | Returns |
 |---|---|---|
-| 1 sec mechanical render (FFmpeg) | ~$0.0001 | 1 credit |
-| 1 sec caption / overlay | ~$0.0001 | 1 credit |
-| 1 sec Runway Gen-4 Turbo B-roll | ~$0.06 | 25 credits |
-| 1 sec Runway Gen-4 1080p B-roll | ~$0.12 | 50 credits |
-| 1000 chars ElevenLabs voice | ~$0.20 | 60 credits |
-| 30 sec Suno music generation | ~$0.10 | 40 credits |
+| `POST /runs` | `{ name, goal, brief, caption, media_url }` | `{ run_id }` |
+| `GET /runs/:id` | — | `{ status, result?: SuggestionPlan }` (see §3) |
+| `GET /runs?limit=20` | — | `PastRun[]` for the sidebar |
+| `GET /runs/:id/events` (SSE or WebSocket) | — | Stream of `{ stage, regionKey?, progress }` events for the Analyzing view |
 
-These are reference numbers, not contractual. The Metering Service calculates actual charges per job from current vendor pricing pulled at job time, so margin is preserved if upstream pricing shifts.
+### 5.2 Past run shape (sidebar)
 
-### 4.3 Subscription Tiers (illustrative)
+```ts
+type PastRun = {
+  id:    string;            // "r-014"
+  name:  string;            // campaign name
+  date:  string;            // "Apr 28" — pre-formatted server-side
+  kind:  "Video" | "Image";
+  score: number;            // composite 0..100
+};
+```
 
-| Tier | Price / month | Included credits | Effective $/credit | Generative tier access |
-|---|---|---|---|---|
-| Free | $0 | Suggestions and simulation only | n/a | None (no execution) |
-| Starter | $29 | 1,500 | $0.019 | Mechanical only (Tier 1) |
-| Pro | $99 | 8,000 | $0.012 | Mechanical + capped Tier 3 |
-| Studio | $299 | 30,000 | $0.010 | Mechanical + full Tier 3 |
-| Overage (any tier) | n/a | n/a | $0.02 | Same as base tier |
+### 5.3 Streaming progress (Analyzing view)
 
-A typical short-form Reel in the **execute-with-light-generation** path consumes roughly 200 to 600 credits. A heavy Tier 3 Reel consuming Gen-4 1080p plus voice plus music can hit 1,500 to 3,000 credits. The Pro tier is sized to comfortably handle 10 to 30 fully-executed videos per month for the typical creator.
+The current frontend animation is hard-coded to fake six 450ms region scans. Production should drive the same animation off real events:
 
-### 4.4 Where the Margin Comes From
-The 2x markup is structurally necessary. It absorbs:
-*   Failed generations and retries (Runway and similar models have non-trivial failure rates).
-*   Storage and CDN egress on rendered output.
-*   The orchestration layer (queues, workers, Stripe fees, observability).
-*   Phase 1 to 4 compute costs, which are otherwise unrecovered for users on the Free tier.
+```ts
+// over SSE, server-sent events:
+event: stage
+data: { "stage": "neuro_scanning", "regionKey": "memory", "progress": 0.16 }
 
-The architecture deliberately keeps suggestion-only and simulation-only access free, because Phases 1 to 4 produce Covalix's most differentiated signal. Charging starts at execution, where the cost is real and the willingness to pay is highest.
+event: stage
+data: { "stage": "neuro_scanning", "regionKey": "emotion", "progress": 0.33 }
 
-## 5. State Management & Handoffs
-To ensure stability, especially if running models sequentially to manage VRAM constraints, direct memory-to-memory passing between heavy modules should be avoided.
+// ...
 
-*   **The Handoff Database:** Implement a lightweight local database (SQLite for development, PostgreSQL for production). 
-*   **Execution Pattern:** 
-    1. TRIBE finishes $\rightarrow$ Writes `neuro_metrics.json` to DB $\rightarrow$ VRAM is cleared.
-    2. GraphRAG finishes $\rightarrow$ Writes `trend_context.json` to DB.
-    3. An async orchestrator triggers the Claude API call only when both DB entries are flagged as `COMPLETE`.
-    4. Claude's output (Edit Plan JSON) is written to the DB, which acts as the starting payload for the MiroFish simulation.
-    5. MiroFish writes per-edit predicted lift back to the DB.
-    6. The Edit Router reads the lift-annotated Edit Plan, performs a wallet pre-flight check, and dispatches each edit to its provider.
-    7. Provider job results stream back through the Metering Service, which writes usage events and final composite pointers to the DB.
+event: stage
+data: { "stage": "computing", "progress": 0.85 }
 
-### 5.1 New Tables for Phases 5 and 6
-*   `edit_jobs`: one row per edit object (status, provider, wholesale cost, credit charge, output URI).
-*   `credit_wallets`: per-user credit balance, plan tier, overage opt-in flag.
-*   `usage_events`: append-only log of every metered operation, used for invoicing and cost reconciliation.
-*   `subscriptions`: Stripe subscription IDs, current period bounds, included credit allowance.
+event: stage
+data: { "stage": "complete", "progress": 1.0 }
+```
 
-This separation means billing can be audited against vendor invoices independently of product behavior, which matters once usage scales and a single Runway API regression could otherwise compound silently into a margin loss.
+`AnalysisAnimation` already accepts an `onComplete` callback and a sequential per-region activation pattern — wiring it to the SSE stream is a matter of replacing the `setTimeout` chain with an `EventSource` listener.
+
+### 5.4 Auth
+
+Auth is Supabase JWT. Every backend endpoint in §5.1 requires the `Authorization: Bearer <jwt>` header; `cortyze_frontend/lib/api.ts` (to be re-introduced) is the place to attach it. The `runs.user_id` column is the join key — users only ever see their own runs.
+
+## 6. Open questions
+
+These are intentionally not answered in this doc — they're product/cost calls, not architecture calls.
+
+1.  **Where does the trend firehose come from?** Real-time scraping, NewsAPI, Reddit, X — each option has different cost/freshness/coverage trade-offs. Picking one is a follow-up.
+2.  **Is the GraphRAG layer worth the operational cost on day one?** It's the heaviest non-GPU dependency. A simpler v1 would skip Phase 2 entirely and feed Claude only the brief + region scores; reference cards become optional. We can ship without it and add it back when we have signal that suggestions need cultural grounding.
+3.  **MiroFish in v1 or v2?** Phase 4 is the slowest single phase per dollar. A v1 could ship with Claude-only lift estimates (no simulation) and add MiroFish once base usage justifies it. The frontend doesn't care which one writes the `lift` field.
+
+These should be resolved before the first user-facing version goes out, so the suggestion quality bar is set deliberately rather than by what was easiest to wire up.
