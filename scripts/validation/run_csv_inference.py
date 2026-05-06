@@ -95,7 +95,7 @@ from pathlib import Path
 # Make sibling script importable when run as a file.
 sys.path.insert(0, str(Path(__file__).parent))
 
-from cortyze_product.scripts.validation.analyze_instagram_reels import run_batch  # noqa: E402
+from analyze_instagram_reels import run_batch  # noqa: E402
 
 _URL_COLUMN_CANDIDATES = (
     "url",

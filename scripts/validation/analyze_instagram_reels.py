@@ -194,6 +194,8 @@ def _download_reel(
     if cookies_browser:
         # yt-dlp accepts a tuple: (browser_name,) or (browser, profile, ...)
         opts["cookiesfrombrowser"] = (cookies_browser,)
+    elif Path("/app/cookies.txt").exists():
+        opts["cookiefile"] = "/app/cookies.txt"
 
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
