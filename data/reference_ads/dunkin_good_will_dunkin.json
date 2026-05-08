@@ -1,0 +1,38 @@
+{
+  "name": "dunkin_good_will_dunkin",
+  "display_name": "Dunkin \u2014 Good Will Dunkin",
+  "source_url": "https://www.youtube.com/watch?v=RCr6uVGZOUc",
+  "thumbnail_url": "https://img.youtube.com/vi/RCr6uVGZOUc/maxresdefault.jpg",
+  "description": "5x median engagement. Ben Affleck, Jennifer Aniston, Tom Brady, Jason Alexander. 90s sitcom parody.",
+  "caption": "Dunkin' - Good Will Dunkin' (Super Bowl Commercial 2026)\n\nDunkin's 2026 Super Bowl commercial, \"Good Will Dunkin',\" is a 60-second star-studded spot featuring Ben Affleck as a \"Good Will Hunting\" style math genius working at a Dunkin'. The ad features TV sitcom icons Jennifer Aniston, Matt LeBlanc, Jason Alexander, Jaleel White, Alfonso Ribeiro, Jasmine Guy, and a cameo by Tom Brady.\n\nCredits:\n- Client/Brand: Dunkin'\n- Agency: Dunkin' Donuts\n- Key Talent: Ben Affleck, Jennifer Aniston, Matt LeBl",
+  "tags": [
+    "dunkin",
+    "super_bowl_2026",
+    "engagement",
+    "winner"
+  ],
+  "content_type": "video",
+  "license": "Fair use \u2014 research / educational",
+  "predictions_path": "results\\superbowl\\results_csv\\run_20260506_154321_cortyze-superbowl-test-ads\\predictions\\fcf3bccf-62a9-43b6-aacb-37cb42ab6193.npy",
+  "predictions_shape": [
+    97,
+    20484
+  ],
+  "region_scores": {
+    "visual_cortex": 43.305235759175254,
+    "fusiform_face": 42.25381646936291,
+    "amygdala": 37.74771379405073,
+    "prefrontal": 52.111658181052455,
+    "temporal_language": 66.47065631813695,
+    "hippocampus": 57.19221844442153,
+    "motor": 47.320122413909736,
+    "reward": 50.21673784370038
+  },
+  "overall_by_goal": {
+    "conversion": 49.52469126747652,
+    "awareness": 46.81991992486079,
+    "engagement": 46.064284868974276,
+    "brand_recall": 49.93194528233141
+  },
+  "registered_at": "2026-05-07T05:11:52Z"
+}

@@ -275,8 +275,8 @@ class _PostgresRunStore:
                         """
                         INSERT INTO suggestions
                             (run_id, ord, priority, title, area, lift,
-                             explanation, reference_json)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                             explanation, reference_json, examples_json)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             run_id,
@@ -288,6 +288,7 @@ class _PostgresRunStore:
                             s.explanation,
                             json.dumps(s.reference.model_dump())
                             if s.reference else None,
+                            json.dumps(s.examples) if s.examples else None,
                         ),
                     )
                 cur.execute("COMMIT")
@@ -353,7 +354,7 @@ class _PostgresRunStore:
             region_rows = cur.fetchall()
             cur.execute(
                 "SELECT ord, priority, title, area, lift, "
-                "explanation, reference_json "
+                "explanation, reference_json, examples_json "
                 "FROM suggestions WHERE run_id = %s ORDER BY ord",
                 (run_id,),
             )
@@ -375,6 +376,11 @@ class _PostgresRunStore:
         suggestions: list[Suggestion] = []
         for row in sug_rows:
             ref = _decode_reference(row[6])
+            examples_raw = row[7]
+            # examples_json is a jsonb column; psycopg returns it already
+            # parsed as a Python list. Older rows written before this
+            # column existed come back as None — treat as empty list.
+            examples = examples_raw if isinstance(examples_raw, list) else []
             suggestions.append(
                 Suggestion(
                     id=int(row[0]),
@@ -384,6 +390,7 @@ class _PostgresRunStore:
                     lift=float(row[4]),
                     explanation=row[5],
                     reference=ref,
+                    examples=examples,
                 )
             )
 

@@ -166,8 +166,8 @@ def main() -> int:
         print(f"  Tags:         {', '.join(tags)}")
     if not args.thumbnail_url:
         print(
-            "  ⚠️  No --thumbnail-url provided. The SuggestionCard will fall back "
-            "to a text-only example. Add one for a richer card.",
+            "  WARNING: No --thumbnail-url provided. The SuggestionCard will "
+            "fall back to a text-only example. Add one for a richer card.",
         )
     return 0
 

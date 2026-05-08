@@ -1,0 +1,38 @@
+{
+  "name": "ring_amazon_search_party_be_a_hero",
+  "display_name": "Ring (Amazon) \u2014 Search Party - Be A Hero",
+  "source_url": "https://www.youtube.com/watch?v=OheUzrXsKrY",
+  "thumbnail_url": "https://img.youtube.com/vi/OheUzrXsKrY/maxresdefault.jpg",
+  "description": "#2 most-liked (755). Lost dogs + community + AI feature. Heartwarming. 4M+ YouTube views.",
+  "caption": "Join the team and neighbors across your community to help reunite lost dogs using Search Party and your outdoor cameras.\n\nDownload the Ring app free in the App Store or Google Play.\n\nBuild Your Ring of Security: http://to.ring.com/ytbundles \nGet Ring for your whole home: http://to.ring.com/ytcollections \nSee more Ring stories at https://facebook.com/ring \nTag AlwaysHome on https://instagram.com/ring \nFor the latest news and tips on home security, visit https://blog.ring.com. \n\nRing provides effe",
+  "tags": [
+    "ring_amazon",
+    "super_bowl_2026",
+    "awareness",
+    "winner"
+  ],
+  "content_type": "video",
+  "license": "Fair use \u2014 research / educational",
+  "predictions_path": "results\\superbowl\\results_csv\\run_20260506_154321_cortyze-superbowl-test-ads\\predictions\\b59237ec-48d8-4dde-ae55-318f640c3989.npy",
+  "predictions_shape": [
+    83,
+    20484
+  ],
+  "region_scores": {
+    "visual_cortex": 37.425916505602544,
+    "fusiform_face": 25.282462894390832,
+    "amygdala": 33.074659934955555,
+    "prefrontal": 45.95937848498012,
+    "temporal_language": 60.56000522977353,
+    "hippocampus": 54.75834548859976,
+    "motor": 45.7095504918575,
+    "reward": 47.80453212911264
+  },
+  "overall_by_goal": {
+    "conversion": 45.123513427724355,
+    "awareness": 41.16958226320239,
+    "engagement": 40.06710571936963,
+    "brand_recall": 44.56910496113888
+  },
+  "registered_at": "2026-05-07T05:11:50Z"
+}

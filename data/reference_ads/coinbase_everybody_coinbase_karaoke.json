@@ -1,0 +1,38 @@
+{
+  "name": "coinbase_everybody_coinbase_karaoke",
+  "display_name": "Coinbase \u2014 Everybody Coinbase (Karaoke)",
+  "source_url": "https://www.youtube.com/watch?v=O0u8VAp8hvc",
+  "thumbnail_url": "https://img.youtube.com/vi/O0u8VAp8hvc/maxresdefault.jpg",
+  "description": "Kellogg F grade. Confusing \u2014 unclear what product does. Lo-fi karaoke text on screen, basic animation, no story.",
+  "caption": "",
+  "tags": [
+    "coinbase",
+    "super_bowl_2026",
+    "conversion",
+    "loser"
+  ],
+  "content_type": "video",
+  "license": "Fair use \u2014 research / educational",
+  "predictions_path": "results\\superbowl\\results_csv\\run_20260506_154321_cortyze-superbowl-test-ads\\predictions\\85d48ebd-dbc6-425e-996d-2480781cd56b.npy",
+  "predictions_shape": [
+    60,
+    20484
+  ],
+  "region_scores": {
+    "visual_cortex": 40.68788196197267,
+    "fusiform_face": 41.80669037452144,
+    "amygdala": 47.98071938173647,
+    "prefrontal": 48.449147120467856,
+    "temporal_language": 52.50782706214856,
+    "hippocampus": 52.58104068981717,
+    "motor": 46.434149688617204,
+    "reward": 44.0080522823509
+  },
+  "overall_by_goal": {
+    "conversion": 46.66699590922711,
+    "awareness": 46.3612033968341,
+    "engagement": 45.56579846016695,
+    "brand_recall": 47.85804825247277
+  },
+  "registered_at": "2026-05-07T05:11:54Z"
+}

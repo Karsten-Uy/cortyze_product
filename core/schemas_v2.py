@@ -81,6 +81,11 @@ class Suggestion(BaseModel):
     lift: float  # e.g. 8.2 = +8.2% expected lift
     explanation: str
     reference: Reference | None = None
+    # Slugs of registered library examples (services/examples/library.py).
+    # The frontend lazy-fetches GET /examples/{name} on card expand and
+    # renders the manifest's display_name, scores, and thumbnail. Empty
+    # list = library had no good match → frontend falls back to `reference`.
+    examples: list[str] = []
 
 
 Status = Literal["Needs work", "Solid", "Strong", "Hero"]

@@ -1,0 +1,38 @@
+{
+  "name": "lays_last_harvest",
+  "display_name": "Lays \u2014 Last Harvest",
+  "source_url": "https://www.youtube.com/watch?v=EBnLXlvrNng",
+  "thumbnail_url": "https://img.youtube.com/vi/EBnLXlvrNng/maxresdefault.jpg",
+  "description": "#1 HarrisX (93.2/100). 92% liked, 90% memorable, 71% purchase intent. Father-daughter farm story. Somewhere Only We Know by Keane.",
+  "caption": "",
+  "tags": [
+    "lays",
+    "super_bowl_2026",
+    "brand_recall",
+    "winner"
+  ],
+  "content_type": "video",
+  "license": "Fair use \u2014 research / educational",
+  "predictions_path": "results\\superbowl\\results_csv\\run_20260506_154321_cortyze-superbowl-test-ads\\predictions\\50e90342-fe52-486f-bfe7-e34382e5c09f.npy",
+  "predictions_shape": [
+    61,
+    20484
+  ],
+  "region_scores": {
+    "visual_cortex": 65.17178179486456,
+    "fusiform_face": 65.72934049576634,
+    "amygdala": 40.03650516441352,
+    "prefrontal": 58.92662620958218,
+    "temporal_language": 66.65201500786397,
+    "hippocampus": 62.041436650263734,
+    "motor": 59.7219856498079,
+    "reward": 56.643966982923786
+  },
+  "overall_by_goal": {
+    "conversion": 58.44505191416614,
+    "awareness": 57.28818225195127,
+    "engagement": 56.62961770723031,
+    "brand_recall": 58.460431005629346
+  },
+  "registered_at": "2026-05-07T05:11:49Z"
+}

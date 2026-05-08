@@ -1,0 +1,38 @@
+{
+  "name": "budweiser_american_icons",
+  "display_name": "Budweiser \u2014 American Icons",
+  "source_url": "https://www.youtube.com/watch?v=senSr4-f9CE",
+  "thumbnail_url": "https://img.youtube.com/vi/senSr4-f9CE/maxresdefault.jpg",
+  "description": "#1 USA Today Ad Meter (4.00/5). Clydesdale + bald eagle. Free Bird soundtrack. Pure visual storytelling, zero dialogue.",
+  "caption": "Budweiser - American Icons (Super Bowl Commercial 2026)\n\nBudweiser\u2019s 2026 Super Bowl LX commercial, \"American Icons,\" is a 60-second spot celebrating the brand's 150th anniversary and America's 250th birthday. It features an emotional story of friendship between a Clydesdale foal and an American Bald Eagle set to Lynyrd Skynyrd's \"Free Bird,\" emphasizing tradition, patriotism, and the \"Made in America\" theme.\n\nCredits:\n- Client/Brand: Anheuser-Busch / Budweiser (Celebrating 150th Anniversary)\n- ",
+  "tags": [
+    "budweiser",
+    "super_bowl_2026",
+    "brand_recall",
+    "winner"
+  ],
+  "content_type": "video",
+  "license": "Fair use \u2014 research / educational",
+  "predictions_path": "results\\superbowl\\results_csv\\run_20260506_154321_cortyze-superbowl-test-ads\\predictions\\f7072ed1-66db-4979-81e9-688a925ccc1c.npy",
+  "predictions_shape": [
+    95,
+    20484
+  ],
+  "region_scores": {
+    "visual_cortex": 40.54014840470429,
+    "fusiform_face": 31.55398245022223,
+    "amygdala": 44.48633581407053,
+    "prefrontal": 48.98681409224085,
+    "temporal_language": 58.76405473533005,
+    "hippocampus": 55.01923778751821,
+    "motor": 43.473512001481915,
+    "reward": 48.640678503016474
+  },
+  "overall_by_goal": {
+    "conversion": 47.09334536107789,
+    "awareness": 45.56413481886907,
+    "engagement": 44.47358213193827,
+    "brand_recall": 47.92147451607522
+  },
+  "registered_at": "2026-05-07T05:11:46Z"
+}

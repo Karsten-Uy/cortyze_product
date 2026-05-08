@@ -12,7 +12,7 @@ Results view renders without translation.
 from __future__ import annotations
 
 from core.goals_v2 import composite_score, status_label
-from core.regions_v2 import BENCHMARKS, REGION_KEYS
+from core.regions_v2 import BENCHMARKS, LEGACY_TO_V2, REGION_KEYS
 from core.schemas_v2 import (
     Reference,
     RegionScore,
@@ -22,6 +22,11 @@ from core.schemas_v2 import (
 
 from ..trends.protocol import TrendContext, TrendReference
 from .protocol import SynthesisInput
+
+# Inverse of LEGACY_TO_V2 — v2 region key → legacy 8-region key the
+# examples library indexes by. Used to look up reference manifests for
+# a v2 suggestion.
+_V2_TO_LEGACY: dict[str, str] = {v: k for k, v in LEGACY_TO_V2.items()}
 
 
 # One or two templates per region. `lift` here is a heuristic seed —
@@ -182,7 +187,14 @@ class MockSynthesisClient:
                         area=region,
                         lift=template["lift"],  # type: ignore[arg-type]
                         explanation=template["explanation"],  # type: ignore[arg-type]
-                        reference=_match_reference(region, payload.trend_context),
+                        # `reference` is the legacy trends-mock card (Aesop /
+                        # Apple / Nike / Dove). Intentionally left None — the
+                        # frontend now exclusively renders library examples
+                        # via `examples` slugs and lazy `/examples/{name}`
+                        # fetches. Keeping the field in the schema for
+                        # backward-compat with old DB-cached runs.
+                        reference=None,
+                        examples=_examples_for_region(region, payload.goal),
                     )
                 )
                 next_id += 1
@@ -223,3 +235,69 @@ def _to_api_reference(ref: TrendReference) -> Reference:
         scoreB=ref.score_overall,
         labelB=ref.label_overall,
     )
+
+
+def _examples_for_region(v2_region: str, goal: str, n: int = 2) -> list[str]:
+    """Return library example slugs for a v2 region + run goal.
+
+    Best-effort with logging: if the library can't load or the goal value
+    isn't representable in the v1 Goal enum, log the cause at WARNING and
+    return []. We don't crash the whole synthesis over a missing example.
+    """
+    import logging
+
+    log = logging.getLogger(__name__)
+
+    print(
+        f"[DEBUG _examples_for_region] v2_region={v2_region!r} goal={goal!r}",
+        flush=True,
+    )
+
+    legacy_region = _V2_TO_LEGACY.get(v2_region)
+    if not legacy_region:
+        log.warning("no legacy region mapping for v2 region=%r", v2_region)
+        print(f"[DEBUG] -> no legacy mapping, returning []", flush=True)
+        return []
+
+    # The v2 surface has 5 goals (brand_recall, purchase_intent,
+    # emotional_resonance, trust, attention); the v1 Goal enum the
+    # library indexes by has 4 (conversion, awareness, engagement,
+    # brand_recall). Translate v2 → v1 via a small static map; goals
+    # absent from v1 fall back to the closest match.
+    from core.scoring.goals import Goal
+
+    v2_to_v1_goal = {
+        "brand_recall":        Goal.BRAND_RECALL,
+        "purchase_intent":     Goal.CONVERSION,
+        "emotional_resonance": Goal.ENGAGEMENT,
+        "trust":               Goal.AWARENESS,
+        "attention":           Goal.AWARENESS,
+    }
+    v1_goal = v2_to_v1_goal.get(goal)
+    if v1_goal is None:
+        # Unknown v2 goal — try the raw string in case caller passed a
+        # v1 value directly (back-compat with tests).
+        try:
+            v1_goal = Goal(goal)
+        except ValueError:
+            log.warning("no v1 Goal mapping for v2 goal=%r", goal)
+            return []
+
+    try:
+        from services.examples.library import best_examples
+
+        ads = best_examples(region=legacy_region, goal=v1_goal, n=n)
+        names = [ad["name"] for ad in ads]
+        print(
+            f"[DEBUG] -> region={legacy_region} goal={v1_goal.value} "
+            f"returned {len(ads)} ads: {names}",
+            flush=True,
+        )
+        return names
+    except Exception as exc:
+        log.warning(
+            "best_examples failed for region=%s goal=%s: %s",
+            legacy_region, v1_goal, exc,
+        )
+        print(f"[DEBUG] -> EXCEPTION: {type(exc).__name__}: {exc}", flush=True)
+        return []

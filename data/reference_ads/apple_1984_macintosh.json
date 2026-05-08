@@ -1,0 +1,38 @@
+{
+  "name": "apple_1984_macintosh",
+  "display_name": "Apple \u2014 1984 Macintosh",
+  "source_url": "https://www.youtube.com/watch?v=VtvjbmoDx-I",
+  "thumbnail_url": "https://img.youtube.com/vi/VtvjbmoDx-I/maxresdefault.jpg",
+  "description": "#1 Super Bowl ad ever. Ridley Scott directed. Cinematic dystopian one-shot. Cultural phenomenon.",
+  "caption": "http://www.mac-history.net/apple-history-tv/ads/2011-07-12/1984-the-famous-super-bowl-spot\n\n\"1984\" is an American television commercial which introduced the Apple Macintosh personal computer for the first time. It was conceived by Steve Hayden, Brent Thomas and Lee Clow at Chiat/Day, Venice, produced by New York production company Fairbanks Films, and directed by Ridley Scott. Anya Major performed as the unnamed heroine and David Graham as Big Brother. Its only U.S. daytime televised broadcast w",
+  "tags": [
+    "apple",
+    "super_bowl_1984",
+    "brand_recall",
+    "all_time_great"
+  ],
+  "content_type": "video",
+  "license": "Fair use \u2014 research / educational",
+  "predictions_path": "results\\superbowl\\results_csv\\run_20260506_154321_cortyze-superbowl-test-ads\\predictions\\87d19893-ef75-4253-985f-b8894d2a26b0.npy",
+  "predictions_shape": [
+    142,
+    20484
+  ],
+  "region_scores": {
+    "visual_cortex": 32.01654711464436,
+    "fusiform_face": 23.902204101812288,
+    "amygdala": 25.433903483387198,
+    "prefrontal": 35.41987182167353,
+    "temporal_language": 57.092209319293254,
+    "hippocampus": 55.57523353452032,
+    "motor": 29.415369946775517,
+    "reward": 34.96145163502809
+  },
+  "overall_by_goal": {
+    "conversion": 35.24066174548031,
+    "awareness": 35.87870735337928,
+    "engagement": 33.29037504694919,
+    "brand_recall": 40.25093803711457
+  },
+  "registered_at": "2026-05-07T05:11:55Z"
+}
