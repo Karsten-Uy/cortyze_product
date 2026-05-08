@@ -36,6 +36,10 @@ class RunRequest(BaseModel):
     brief: str = ""
     caption: str = ""
     media_url: str | None = None
+    # Stable R2 object key from /upload-url. Persisted on the run so
+    # GET /runs/:id can re-presign a fresh `media_url` after the
+    # original presigned URL's 1h TTL elapses.
+    media_object_key: str | None = None
     # Image vs video kind. Inferred from the file extension when missing.
     kind: Literal["Video", "Image"] | None = None
 
@@ -86,6 +90,11 @@ class Suggestion(BaseModel):
     # renders the manifest's display_name, scores, and thumbnail. Empty
     # list = library had no good match → frontend falls back to `reference`.
     examples: list[str] = []
+    # Window (seconds) in the user's clip where this suggestion's region
+    # peaks — fed to the per-suggestion clip player on the results page.
+    # `None` for image-only runs and for older DB-cached suggestions.
+    peak_start_s: float | None = None
+    peak_end_s: float | None = None
 
 
 Status = Literal["Needs work", "Solid", "Strong", "Hero"]
@@ -131,6 +140,8 @@ class RunRecord(BaseModel):
     brief: str = ""
     caption: str = ""
     media_url: str | None = None
+    # Stable R2 key for the uploaded clip; powers presigned-URL refresh.
+    media_object_key: str | None = None
     kind: Literal["Video", "Image"] = "Video"
     status: RunStatus = "queued"
     created_at: str  # ISO-8601, server-set

@@ -134,8 +134,8 @@ class _InMemoryRunStore:
 # silently dropped — the `result` field is handled separately because it
 # spans three other tables.
 _UPDATABLE_RUNS_COLUMNS = frozenset(
-    {"name", "goal", "brief", "caption", "media_url", "kind", "status",
-     "completed_at", "error"}
+    {"name", "goal", "brief", "caption", "media_url", "media_object_key",
+     "kind", "status", "completed_at", "error"}
 )
 
 
@@ -177,9 +177,10 @@ class _PostgresRunStore:
                 """
                 INSERT INTO runs (
                     id, user_id, name, goal, brief, caption,
-                    media_url, kind, status, created_at, completed_at, error
+                    media_url, media_object_key, kind, status,
+                    created_at, completed_at, error
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO NOTHING
                 """,
                 (
@@ -190,6 +191,7 @@ class _PostgresRunStore:
                     record.brief,
                     record.caption,
                     record.media_url,
+                    record.media_object_key,
                     record.kind,
                     record.status,
                     record.created_at,
@@ -275,8 +277,9 @@ class _PostgresRunStore:
                         """
                         INSERT INTO suggestions
                             (run_id, ord, priority, title, area, lift,
-                             explanation, reference_json, examples_json)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                             explanation, reference_json, examples_json,
+                             peak_start_s, peak_end_s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             run_id,
@@ -289,6 +292,8 @@ class _PostgresRunStore:
                             json.dumps(s.reference.model_dump())
                             if s.reference else None,
                             json.dumps(s.examples) if s.examples else None,
+                            s.peak_start_s,
+                            s.peak_end_s,
                         ),
                     )
                 cur.execute("COMMIT")
@@ -303,7 +308,8 @@ class _PostgresRunStore:
             cur.execute(
                 """
                 SELECT id, user_id, name, goal, brief, caption,
-                       media_url, kind, status, created_at, completed_at, error
+                       media_url, media_object_key, kind, status,
+                       created_at, completed_at, error
                 FROM runs WHERE id = %s
                 """,
                 (run_id,),
@@ -320,11 +326,12 @@ class _PostgresRunStore:
             "brief": row[4],
             "caption": row[5],
             "media_url": row[6],
-            "kind": row[7],
-            "status": row[8],
-            "created_at": _iso(row[9]),
-            "completed_at": _iso(row[10]),
-            "error": row[11],
+            "media_object_key": row[7],
+            "kind": row[8],
+            "status": row[9],
+            "created_at": _iso(row[10]),
+            "completed_at": _iso(row[11]),
+            "error": row[12],
             "result": None,
         }
 
@@ -354,7 +361,8 @@ class _PostgresRunStore:
             region_rows = cur.fetchall()
             cur.execute(
                 "SELECT ord, priority, title, area, lift, "
-                "explanation, reference_json, examples_json "
+                "explanation, reference_json, examples_json, "
+                "peak_start_s, peak_end_s "
                 "FROM suggestions WHERE run_id = %s ORDER BY ord",
                 (run_id,),
             )
@@ -391,6 +399,8 @@ class _PostgresRunStore:
                     explanation=row[5],
                     reference=ref,
                     examples=examples,
+                    peak_start_s=float(row[8]) if row[8] is not None else None,
+                    peak_end_s=float(row[9]) if row[9] is not None else None,
                 )
             )
 

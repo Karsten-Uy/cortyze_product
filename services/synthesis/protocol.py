@@ -9,7 +9,7 @@ which suggestions to surface and how to rank them.
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Literal, Protocol
 
 from pydantic import BaseModel
 
@@ -26,6 +26,14 @@ class SynthesisInput(BaseModel):
     `region_scores` is the already-projected v2 6-region dict.
     `prev_score` is the user's most recent composite (used to compute
     `delta` in the response). `None` means this is the user's first run.
+
+    `kind` distinguishes Video runs (per-suggestion peak windows are
+    meaningful → clip player) from Image runs (no time axis → no
+    player). `region_timeseries` is the optional 1 Hz per-region score
+    series produced by real TRIBE inference; when present, real
+    synthesis clients can pick true peak windows via
+    `services.suggestions.moments.find_moments`. The mock pipeline
+    leaves it `None` and uses a deterministic fake window instead.
     """
 
     name: str
@@ -35,6 +43,8 @@ class SynthesisInput(BaseModel):
     region_scores: dict[RegionKey, float]
     trend_context: TrendContext
     prev_score: float | None = None
+    kind: Literal["Video", "Image"] = "Video"
+    region_timeseries: dict[RegionKey, list[float]] | None = None
 
 
 class SynthesisClient(Protocol):

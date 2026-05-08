@@ -93,6 +93,30 @@ def test_run_completes_with_full_suggestion_plan():
         assert isinstance(s["lift"], (int, float))
         assert s["title"]
         assert s["explanation"]
+        # Video runs (default) must carry a peak window so the frontend
+        # clip player has something to seek to.
+        assert s["peak_start_s"] is not None
+        assert s["peak_end_s"] is not None
+        assert s["peak_end_s"] > s["peak_start_s"]
+
+
+def test_image_run_omits_peak_windows():
+    """Image runs have no time axis; suggestions should leave peaks unset."""
+    r = client.post(
+        "/runs",
+        json={
+            "name": "Image post",
+            "goal": "brand_recall",
+            "kind": "Image",
+            "media_url": "https://example.com/static.png",
+        },
+    )
+    final = _poll_until_complete(r.json()["run_id"])
+    plan = final["result"]
+    assert plan is not None
+    for s in plan["suggestions"]:
+        assert s["peak_start_s"] is None
+        assert s["peak_end_s"] is None
 
 
 def test_runs_list_includes_completed_run():

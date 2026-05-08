@@ -17,6 +17,7 @@ without Supabase still works end-to-end.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import AsyncIterator
 
@@ -39,6 +40,9 @@ from ..limiter import limiter
 # router.
 from services.orchestrator import EVENT_BUS, start_run
 from services.persistence.runs_v2 import RUN_STORE
+from services.storage.r2 import get_client as get_r2_client
+
+_log = logging.getLogger("cortyze.routes.runs")
 
 
 router = APIRouter()
@@ -83,6 +87,7 @@ async def create_run(
         brief=body.brief,
         caption=body.caption,
         media_url=body.media_url,
+        media_object_key=body.media_object_key,
         kind=body.kind or _infer_kind(body.media_url),  # type: ignore[arg-type]
         status="queued",
         created_at=_now_iso(),
@@ -113,6 +118,25 @@ async def get_run(
     if record.user_id is not None and record.user_id != user_id:
         # Don't leak existence — same 404 as a missing run.
         raise HTTPException(status_code=404, detail=f"run {run_id!r} not found")
+    # Re-presign the uploaded clip so the frontend's clip player still
+    # works after the original 1h presigned URL TTL elapses. The object
+    # itself lives 7 days under the bucket lifecycle rule. If the object
+    # has aged out (or anything else fails) we null `media_url` and let
+    # the frontend's no-clip branch handle the fallback.
+    if record.media_object_key:
+        r2 = get_r2_client()
+        if r2 is not None:
+            try:
+                fresh = r2.presign_uploads_get(record.media_object_key)
+                record = record.model_copy(update={"media_url": fresh})
+            except Exception as exc:  # noqa: BLE001 — anything from boto/network
+                _log.info(
+                    "could not refresh media_url for run %s (key=%s): %s",
+                    run_id,
+                    record.media_object_key,
+                    exc,
+                )
+                record = record.model_copy(update={"media_url": None})
     return record
 
 

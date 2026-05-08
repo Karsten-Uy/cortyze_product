@@ -21,6 +21,7 @@ from core.schemas_v2 import (
 )
 
 from ..trends.protocol import TrendContext, TrendReference
+from .peaks import fake_peak_window
 from .protocol import SynthesisInput
 
 # Inverse of LEGACY_TO_V2 — v2 region key → legacy 8-region key the
@@ -177,8 +178,13 @@ class MockSynthesisClient:
 
         suggestions: list[Suggestion] = []
         next_id = 1
+        is_video = payload.kind == "Video"
         for region in gaps:
             for template in _TEMPLATES.get(region, []):
+                peak_start: float | None = None
+                peak_end: float | None = None
+                if is_video:
+                    peak_start, peak_end = fake_peak_window(next_id, region)
                 suggestions.append(
                     Suggestion(
                         id=next_id,
@@ -195,6 +201,8 @@ class MockSynthesisClient:
                         # backward-compat with old DB-cached runs.
                         reference=None,
                         examples=_examples_for_region(region, payload.goal),
+                        peak_start_s=peak_start,
+                        peak_end_s=peak_end,
                     )
                 )
                 next_id += 1

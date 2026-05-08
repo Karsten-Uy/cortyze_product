@@ -77,6 +77,12 @@ async def _pipeline(record: RunRecord) -> None:
             region_scores=region_scores,
             trend_context=trend_ctx,
             prev_score=prev_score,
+            kind=record.kind,
+            # Real-mode hook: when _run_phase_1 starts returning the 1 Hz
+            # per-region timeseries from TRIBE, pass it through here so
+            # the synthesis client can compute true peak windows. Mock
+            # pipeline leaves this None.
+            region_timeseries=None,
         )
         plan = get_synthesis_client().synthesize(synth_in)
 

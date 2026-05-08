@@ -63,8 +63,10 @@ class R2Client:
     def mint_upload_url(self, content_type: str = "video/mp4") -> dict[str, str]:
         """Create a presigned PUT URL for direct browser upload.
 
-        Returns {put_url, get_url, content_url}. Frontend PUTs the file to
-        put_url, then sends content_url to /analyze.
+        Returns {put_url, get_url, content_url, object_key}. Frontend PUTs the
+        file to put_url, then sends content_url to /analyze. The object_key
+        is round-tripped to /runs so the API can re-presign on report load
+        (presigned URLs expire ~1h but the underlying object lives 7 days).
         """
         key = f"uploads/{uuid4()}"
         put_url = self._client.generate_presigned_url(
@@ -81,7 +83,23 @@ class R2Client:
             Params={"Bucket": self.uploads_bucket, "Key": key},
             ExpiresIn=int(timedelta(hours=1).total_seconds()),
         )
-        return {"put_url": put_url, "get_url": get_url, "content_url": get_url}
+        return {
+            "put_url": put_url,
+            "get_url": get_url,
+            "content_url": get_url,
+            "object_key": key,
+        }
+
+    def presign_uploads_get(self, key: str, *, expires: int = 3600) -> str:
+        """Mint a fresh presigned GET URL for an uploaded clip.
+
+        Called by `GET /runs/:id` so the `media_url` returned to the
+        frontend is fresh on every report load — the original URL minted
+        at upload time is only valid for an hour, but the object lives
+        7 days. Caller is responsible for handling NoSuchKey when the
+        clip has aged past the lifecycle TTL.
+        """
+        return self._presign_get(self.uploads_bucket, key, expires=expires)
 
     def store_predictions(self, request_id: str, predictions: np.ndarray) -> str:
         """Upload (T, 20484) array as float16 NPZ. Returns the R2 URI."""

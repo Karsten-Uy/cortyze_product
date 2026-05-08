@@ -55,6 +55,7 @@ class UploadUrlRequest(BaseModel):
 class UploadUrlResponse(BaseModel):
     put_url: str       # PUT here with the file bytes
     get_url: str       # send this as `media_url` on POST /runs
+    object_key: str    # stable R2 key — round-trip to /runs so /runs/:id can re-presign
     content_type: str  # echo back so the browser sets the matching header
 
 
@@ -99,5 +100,6 @@ async def mint_upload_url(
     return UploadUrlResponse(
         put_url=minted["put_url"],
         get_url=minted["get_url"],
+        object_key=minted["object_key"],
         content_type=body.content_type,
     )
