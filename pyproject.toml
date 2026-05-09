@@ -41,6 +41,29 @@ auth = [
     "PyJWT[crypto]>=2.8",   # crypto extra → cryptography for ES256/RS256/EdDSA
 ]
 
+# Phase 2 GraphRAG / social-context pipeline. Activated by setting
+# TRENDS_MODE=graphrag. Each subgroup is independently optional so the
+# core API stays light when GraphRAG isn't deployed.
+#   * Graph + NLP fundamentals (PR #2)        — networkx, spaCy, VADER
+#   * Scrapers (PR #4 / PR #6)                — praw, pytrends, requests
+#   * Scheduler + retries (PR #4)             — apscheduler, tenacity
+#   * Neo4j backend (PR #5, prod-only)        — neo4j driver
+# spaCy needs `en_core_web_sm` at runtime — install via
+# `uv run python -m spacy download en_core_web_sm` after the extras
+# install. Dockerfile bakes this into a build layer for prod.
+social-context = [
+    "networkx>=3.2",
+    "spacy>=3.7",
+    "vaderSentiment>=3.3",
+    "praw>=7.7",
+    "pytrends>=4.9",
+    "apscheduler>=3.10",
+    "tenacity>=8.2",
+]
+social-context-neo4j = [
+    "neo4j>=5.20",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8",

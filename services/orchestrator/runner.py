@@ -182,13 +182,16 @@ async def _run_phase_2(record: RunRecord):
     )
     # Run the (potentially synchronous) trend client in a thread so
     # we don't block Phase 1's event-loop ticks. Mock mode is
-    # near-instant; a real GraphRAG call may not be.
+    # near-instant; a real GraphRAG call may not be. `request_id` is
+    # threaded through so social_context structured logs tie back to
+    # the run that triggered them.
     client = get_trends_client()
     ctx = await asyncio.to_thread(
         client.fetch,
         brief=record.brief,
         caption=record.caption,
         goal=record.goal,
+        request_id=record.id,
     )
     RUN_STORE.update(record.id, status="context_done")
     return ctx

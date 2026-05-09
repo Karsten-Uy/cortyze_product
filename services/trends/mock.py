@@ -50,13 +50,26 @@ _DEFAULT_REFERENCES: list[TrendReference] = [
 
 
 class MockTrendClient:
-    """Returns a constant TrendContext. Deterministic, free, no I/O."""
+    """Returns a constant TrendContext. Deterministic, free, no I/O.
 
-    def fetch(self, *, brief: str, caption: str, goal: str) -> TrendContext:
+    Phase 2 v2 fields (entities, dominant_topic, etc.) are returned as
+    safe defaults — empty/zero — so consumers that already iterate
+    `references` keep working, while the GraphRAG client can fall back
+    to this implementation and stamp a `fallback_reason` on top.
+    """
+
+    def fetch(
+        self,
+        *,
+        brief: str,
+        caption: str,
+        goal: str,
+        request_id: str | None = None,
+    ) -> TrendContext:
         # We don't actually read the inputs; they're listed in the
         # signature so the protocol shape matches what a real
         # GraphRAG-backed client will need.
-        del brief, caption, goal
+        del brief, caption, goal, request_id
 
         return TrendContext(
             summary=(
@@ -66,4 +79,10 @@ class MockTrendClient:
                 "with a mild trend toward calmer, less-saturated palettes."
             ),
             references=list(_DEFAULT_REFERENCES),
+            # v2 fields — left empty for the mock. The GraphRAG client
+            # will populate them; Phase 3 reads `references` either way.
+            entities=[],
+            dominant_topic=None,
+            brand_risk_score=0.0,
+            cultural_moment=None,
         )

@@ -107,7 +107,32 @@ def create_app() -> FastAPI:
     app.include_router(upload.router)  # POST /upload-url (presigned R2 PUT)
     app.include_router(profile.router)  # GET/PATCH /me
     _log_feature_flags()
+    _maybe_start_social_context_scheduler()
     return app
+
+
+def _maybe_start_social_context_scheduler() -> None:
+    """Boot the Phase 2 GraphRAG ingest cron when `TRENDS_MODE=graphrag`.
+
+    Wrapped in try/except so a misconfigured deployment (missing API
+    keys, missing extras) logs a warning but doesn't fail the API
+    boot — the GraphRAG client falls back to mock automatically.
+    Locks the FastAPI service to `--workers 1`.
+    """
+    if os.environ.get("TRENDS_MODE", "").strip().lower() != "graphrag":
+        return
+    if "pytest" in sys.modules:
+        # Avoid spinning a scheduler thread for every test session.
+        return
+    try:
+        from services.social_context.scheduler import start_scheduler
+
+        start_scheduler()
+    except Exception:
+        logging.getLogger("cortyze.api").exception(
+            "social_context scheduler boot failed; pipeline will fall back "
+            "to mock TrendContext until the scheduler is back up."
+        )
 
 
 app = create_app()

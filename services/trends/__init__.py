@@ -37,13 +37,13 @@ def get_client() -> TrendClient:
         return MockTrendClient()
 
     if mode == "graphrag":
-        # Real implementation lives behind a NotImplementedError so the
-        # operator gets a clear message (vs. a silent fall-through to
-        # mock that would mask a misconfigured prod deployment).
-        raise NotImplementedError(
-            "TRENDS_MODE=graphrag is not implemented yet. "
-            "Set TRENDS_MODE=mock or unset to use the mock client."
-        )
+        # Production GraphRAG client — queries the rolling 48h knowledge
+        # graph, falls back to MockTrendClient (with `fallback_reason`
+        # stamped) when the graph is empty / stale / unhealthy. See
+        # services/social_context/client.py for the full state machine.
+        from services.social_context.client import GraphRAGTrendClient
+
+        return GraphRAGTrendClient()
 
     _log.warning("unknown TRENDS_MODE=%r; falling back to mock", mode)
     from .mock import MockTrendClient
