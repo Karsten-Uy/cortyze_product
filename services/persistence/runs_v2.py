@@ -243,15 +243,26 @@ class _PostgresRunStore:
             try:
                 cur.execute(
                     """
-                    INSERT INTO composites (run_id, score, benchmark, delta, status)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO composites
+                        (run_id, score, benchmark, delta, status, region_timeseries)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (run_id) DO UPDATE SET
-                        score     = EXCLUDED.score,
-                        benchmark = EXCLUDED.benchmark,
-                        delta     = EXCLUDED.delta,
-                        status    = EXCLUDED.status
+                        score             = EXCLUDED.score,
+                        benchmark         = EXCLUDED.benchmark,
+                        delta             = EXCLUDED.delta,
+                        status            = EXCLUDED.status,
+                        region_timeseries = EXCLUDED.region_timeseries
                     """,
-                    (run_id, plan.score, plan.benchmark, plan.delta, plan.status),
+                    (
+                        run_id,
+                        plan.score,
+                        plan.benchmark,
+                        plan.delta,
+                        plan.status,
+                        json.dumps(plan.region_timeseries)
+                        if plan.region_timeseries
+                        else None,
+                    ),
                 )
 
                 for r in plan.regions:
@@ -346,7 +357,7 @@ class _PostgresRunStore:
     def _fetch_result(self, run_id: str) -> SuggestionPlan | None:
         with self._lock, self._conn.cursor() as cur:
             cur.execute(
-                "SELECT score, benchmark, delta, status "
+                "SELECT score, benchmark, delta, status, region_timeseries "
                 "FROM composites WHERE run_id = %s",
                 (run_id,),
             )
@@ -404,6 +415,14 @@ class _PostgresRunStore:
                 )
             )
 
+        # composites.region_timeseries is a jsonb column; psycopg returns
+        # it pre-parsed as a Python dict, but older rows written before
+        # the column existed (or runs whose plan didn't carry one) come
+        # back as None — leave the field unset and the frontend falls
+        # back to the static-bar layout.
+        ts_raw = comp[4]
+        region_timeseries = ts_raw if isinstance(ts_raw, dict) else None
+
         return SuggestionPlan(
             score=float(comp[0]),
             benchmark=float(comp[1]),
@@ -411,6 +430,7 @@ class _PostgresRunStore:
             status=comp[3],  # type: ignore[arg-type]
             regions=regions,
             suggestions=suggestions,
+            region_timeseries=region_timeseries,
         )
 
     # --------------------------------------------------------- list_for_user
