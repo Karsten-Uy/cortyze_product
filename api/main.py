@@ -24,6 +24,7 @@ from .routes import (  # noqa: E402
     analyze,
     campaigns,
     compare,
+    demos,
     examples,
     health,
     profile,
@@ -101,6 +102,7 @@ def create_app() -> FastAPI:
     app.include_router(analyze.router)
     app.include_router(campaigns.router)
     app.include_router(compare.router)
+    app.include_router(demos.router)  # GET /demos — Lab bench sample cards
     app.include_router(examples.router)
     app.include_router(regoal.router)
     app.include_router(runs.router)  # v2 pipeline (POST/GET /runs, SSE)

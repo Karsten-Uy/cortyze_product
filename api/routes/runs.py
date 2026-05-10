@@ -89,6 +89,7 @@ async def create_run(
         media_url=body.media_url,
         media_object_key=body.media_object_key,
         kind=body.kind or _infer_kind(body.media_url),  # type: ignore[arg-type]
+        demo_id=body.demo_id,
         status="queued",
         created_at=_now_iso(),
     )

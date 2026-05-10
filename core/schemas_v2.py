@@ -42,6 +42,10 @@ class RunRequest(BaseModel):
     media_object_key: str | None = None
     # Image vs video kind. Inferred from the file extension when missing.
     kind: Literal["Video", "Image"] | None = None
+    # Demo short-circuit: when set, the orchestrator skips the real
+    # pipeline and returns the canned plan from data/demo_runs/<id>.json.
+    # Used for investor / onboarding demos with pre-known sample videos.
+    demo_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +113,11 @@ class SuggestionPlan(BaseModel):
     status: Status
     regions: list[RegionScore]
     suggestions: list[Suggestion]
+    # Per-region activation samples across the analyzed clip, sampled
+    # at 1 Hz (list index = seconds). `None` for runs without
+    # timeseries — currently only the 3 demo samples carry this. Drives
+    # the per-region sparklines on the Results screen.
+    region_timeseries: dict[RegionKey, list[float]] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +152,11 @@ class RunRecord(BaseModel):
     # Stable R2 key for the uploaded clip; powers presigned-URL refresh.
     media_object_key: str | None = None
     kind: Literal["Video", "Image"] = "Video"
+    # Demo short-circuit identifier (matches data/demo_runs/<id>.json).
+    # Set on creation when the user clicks a "Try a sample" card on the
+    # Lab bench; the orchestrator's `_demo_pipeline` reads this and
+    # bypasses real synthesis/validation.
+    demo_id: str | None = None
     status: RunStatus = "queued"
     created_at: str  # ISO-8601, server-set
     completed_at: str | None = None

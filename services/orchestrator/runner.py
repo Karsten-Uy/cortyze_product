@@ -44,9 +44,18 @@ async def start_run(record: RunRecord) -> None:
     Caller is the route handler — the route returns the run_id
     immediately and never waits on the pipeline. The pipeline writes
     back through `RUN_STORE.update(...)`.
+
+    When `record.demo_id` is set, we run a short cosmetic pipeline that
+    emits the same SSE events as the real one but loads its
+    `SuggestionPlan` from `data/demo_runs/<demo_id>.json` instead of
+    Phase 3 synthesis. The frontend can't tell the difference —
+    analyzing animation plays normally, sidebar populates normally.
     """
     RUN_STORE.put(record)
-    task = asyncio.create_task(_pipeline(record))
+    if record.demo_id:
+        task = asyncio.create_task(_demo_pipeline(record))
+    else:
+        task = asyncio.create_task(_pipeline(record))
     _RUNNING_TASKS.add(task)
     task.add_done_callback(_RUNNING_TASKS.discard)
 
@@ -102,6 +111,96 @@ async def _pipeline(record: RunRecord) -> None:
 
     except Exception as exc:  # noqa: BLE001  — top-level pipeline guard
         _log.exception("pipeline failed for run %s", run_id)
+        RUN_STORE.update(
+            run_id,
+            status="failed",
+            error=str(exc),
+            completed_at=_now_iso(),
+        )
+        await EVENT_BUS.publish(
+            run_id,
+            RunEvent(stage="failed", progress=1.0, error=str(exc)),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Demo short-circuit pipeline
+# ---------------------------------------------------------------------------
+
+
+async def _demo_pipeline(record: RunRecord) -> None:
+    """Cosmetic pipeline for "Try a sample" runs.
+
+    Mimics the real pipeline's stage events at roughly the same cadence
+    so the frontend's analyzing animation plays normally, then loads
+    the canned `SuggestionPlan` from disk. Total wall time ~2s.
+    """
+    from services.demo import load_demo_run
+
+    run_id = record.id
+    try:
+        await EVENT_BUS.publish(run_id, RunEvent(stage="queued", progress=0.0))
+
+        demo = load_demo_run(record.demo_id or "")
+        if demo is None:
+            raise ValueError(
+                f"demo_id={record.demo_id!r} is not registered; "
+                "expected one of data/demo_runs/*.json"
+            )
+
+        # The user didn't upload anything for a demo run, so the
+        # RunRecord starts out with `media_url=None`. Copy the demo's
+        # source URL onto the record so GET /runs/:id returns it — the
+        # Results screen's hero player needs it to render the clip.
+        if demo.media_url:
+            RUN_STORE.update(run_id, media_url=demo.media_url)
+
+        # Phase 1 cosmetic — emit per-region scan events so the
+        # AnalysisAnimation hits each badge in turn. Same shape as the
+        # real Phase 1 in `_run_phase_1`. The frontend's animation plays
+        # its own ~5s cosmetic timeline regardless of backend timing,
+        # so we don't need real sleeps here — just yield to the loop.
+        RUN_STORE.update(run_id, status="neuro_running")
+        for i, key in enumerate(REGION_KEYS):
+            progress = (i + 1) / len(REGION_KEYS) * 0.7
+            await EVENT_BUS.publish(
+                run_id,
+                RunEvent(stage="neuro_scanning", region_key=key, progress=progress),
+            )
+            await asyncio.sleep(0)
+        RUN_STORE.update(run_id, status="neuro_done")
+
+        # Phase 2 cosmetic.
+        RUN_STORE.update(run_id, status="context_running")
+        await EVENT_BUS.publish(
+            run_id, RunEvent(stage="context_running", progress=0.78)
+        )
+        RUN_STORE.update(run_id, status="context_done")
+
+        # Phase 3 cosmetic — skip real synthesis, use the canned plan.
+        RUN_STORE.update(run_id, status="synthesizing")
+        await EVENT_BUS.publish(
+            run_id, RunEvent(stage="synthesizing", progress=0.9)
+        )
+
+        # Phase 4 cosmetic.
+        RUN_STORE.update(run_id, status="validating")
+        await EVENT_BUS.publish(
+            run_id, RunEvent(stage="validating", progress=0.97)
+        )
+
+        RUN_STORE.update(
+            run_id,
+            status="complete",
+            result=demo.plan,
+            completed_at=_now_iso(),
+        )
+        await EVENT_BUS.publish(
+            run_id, RunEvent(stage="complete", progress=1.0)
+        )
+
+    except Exception as exc:  # noqa: BLE001 — top-level guard
+        _log.exception("demo pipeline failed for run %s", run_id)
         RUN_STORE.update(
             run_id,
             status="failed",

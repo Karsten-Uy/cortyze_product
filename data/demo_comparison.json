@@ -1,0 +1,73 @@
+{
+  "pairs": {
+    "apple_1984_vs_lays": {
+      "headline": "Lays — Last Harvest doubles up Apple's iconic spot",
+      "winner_demo_id": "lays",
+      "subhead": "Lays leads on every region. Apple's Face (24) and Emotion (25) collapse confirm an iconic 1984 structure can't carry a modern feed-first brand.",
+      "per_region_winners": {
+        "memory": "lays",
+        "emotion": "lays",
+        "attention": "lays",
+        "language": "lays",
+        "face": "lays",
+        "reward": "lays"
+      },
+      "demo_takeaways": {
+        "lays": [
+          "Strongest on Memory (82) and Face (79) — the brand mark and human moments land cleanly.",
+          "Reward (58) trails — the closing payoff could push higher with a tighter resolution beat."
+        ],
+        "apple_1984": [
+          "Iconic structure carries Language (57) and Memory (56), but Face (24) and Emotion (25) collapse.",
+          "The modern viewer doesn't anchor to the actor or the one-shot dystopian wide; cultural artifact ≠ 2026-era performance ad."
+        ]
+      }
+    },
+    "coinbase_vs_lays": {
+      "headline": "Lays leaves Coinbase's karaoke spot in the dust",
+      "winner_demo_id": "lays",
+      "subhead": "A 35-point gap driven by Memory (+37), Face (+44) and Emotion (+35). Lays gives the brain a story to anchor to; Coinbase gives it a chant.",
+      "per_region_winners": {
+        "memory": "lays",
+        "emotion": "lays",
+        "attention": "lays",
+        "language": "lays",
+        "face": "lays",
+        "reward": "lays"
+      },
+      "demo_takeaways": {
+        "lays": [
+          "Strongest on Memory (82) and Face (79) — the father-daughter arc plus a clear brand mark.",
+          "Every region clears benchmark; even the weakest (Reward 58) is on par with category averages."
+        ],
+        "coinbase": [
+          "Flat-low across all 6 regions (35–58) — no region the spot truly owns.",
+          "Karaoke lyrics give Language a small bump (58), but Face (35) and Emotion (38) confirm the lo-fi format gives the brain nothing memorable to encode."
+        ]
+      }
+    },
+    "apple_1984_vs_coinbase": {
+      "headline": "Coinbase edges Apple — but neither would land in 2026",
+      "winner_demo_id": "coinbase",
+      "subhead": "Two points apart at the bottom of the field. Apple has more dimensional structure on Memory (56) and Language (57), but Coinbase wins five of six regions through its more even (if low) profile. Both need significant work.",
+      "per_region_winners": {
+        "memory": "apple_1984",
+        "emotion": "coinbase",
+        "attention": "coinbase",
+        "language": "coinbase",
+        "face": "coinbase",
+        "reward": "coinbase"
+      },
+      "demo_takeaways": {
+        "apple_1984": [
+          "Memory (56) and Language (57) are the only places where iconic structure pays off.",
+          "Face (24) and Emotion (25) collapse — a literal lo-fi karaoke ad outperforms on connection and arousal."
+        ],
+        "coinbase": [
+          "Wins 5 of 6 regions vs Apple — including Emotion (38 vs 25) and Face (35 vs 24).",
+          "Still 'Needs work' overall — beating a 1984 spot in 2026 isn't a victory; both need a rebuild."
+        ]
+      }
+    }
+  }
+}
